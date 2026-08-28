@@ -50,7 +50,7 @@ public class MainForm : Form
         int port;
         try
         {
-            port = StartServer(htmlPath);
+            port = StartServer(Path.Combine(AppContext.BaseDirectory, "www"));
         }
         catch (Exception ex)
         {
@@ -96,12 +96,27 @@ public class MainForm : Form
     private const int PreferredPort = 47811;
     private const int PortAttempts = 10;
 
-    private int StartServer(string htmlPath)
+    // Most of the game (CSS/JS/UI art/icons) is still inlined as data URIs in
+    // index.html — but the background music tracks are a few MB each, way too
+    // big for that, so they ship as real files under www/audio/ instead. That
+    // means the server needs to actually route by request path now (index.html
+    // at "/", anything else resolved as a real file under wwwRoot), not just
+    // hand back one fixed set of bytes for every request like before.
+    private static readonly Dictionary<string, string> ContentTypes = new(StringComparer.OrdinalIgnoreCase)
     {
-        // The game is one self-contained HTML file (all CSS/JS/art inlined as
-        // data URIs) — read it once and hand back the same bytes for every
-        // request, no routing needed.
-        var bytes = File.ReadAllBytes(htmlPath);
+        [".html"] = "text/html; charset=utf-8",
+        [".mp3"] = "audio/mpeg",
+        [".ogg"] = "audio/ogg",
+        [".wav"] = "audio/wav",
+        [".m4a"] = "audio/mp4",
+    };
+
+    private int StartServer(string wwwRoot)
+    {
+        // Trailing separator so the traversal check below (StartsWith) can't be
+        // fooled by a sibling folder that merely shares wwwRoot as a prefix
+        // (e.g. "...\www-evil" starting with "...\www").
+        var normalizedRoot = Path.GetFullPath(wwwRoot) + Path.DirectorySeparatorChar;
 
         for (var port = PreferredPort; port < PreferredPort + PortAttempts; port++)
         {
@@ -120,7 +135,7 @@ public class MainForm : Form
             }
 
             _listener = listener;
-            Task.Run(() => ServeLoop(listener, bytes));
+            Task.Run(() => ServeLoop(listener, normalizedRoot));
             return port;
         }
 
@@ -128,7 +143,7 @@ public class MainForm : Form
             $"Ports {PreferredPort}-{PreferredPort + PortAttempts - 1} are all in use.");
     }
 
-    private static void ServeLoop(HttpListener listener, byte[] bytes)
+    private static void ServeLoop(HttpListener listener, string wwwRoot)
     {
         while (listener.IsListening)
         {
@@ -136,15 +151,42 @@ public class MainForm : Form
             try { ctx = listener.GetContext(); }
             catch (Exception) { return; } // listener was stopped — normal on app close
 
-            try
+            // Handle each request on its own task instead of finishing one before
+            // accepting the next. This used to serialize every request behind
+            // whichever one arrived first — harmless for a single index.html
+            // response, but once the page can request several audio files close
+            // together (e.g. background music unlocking on the very first click,
+            // the same click a player uses to land a hammer hit and trigger its
+            // SFX) a big music track could sit in front of a tiny effect file in
+            // the queue and delay it noticeably.
+            _ = Task.Run(() => HandleRequest(ctx, wwwRoot));
+        }
+    }
+
+    private static void HandleRequest(HttpListenerContext ctx, string wwwRoot)
+    {
+        try
+        {
+            var reqPath = ctx.Request.Url?.AbsolutePath ?? "/";
+            if (reqPath == "/") reqPath = "/index.html";
+            var relative = reqPath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
+            var fullPath = Path.GetFullPath(Path.Combine(wwwRoot, relative));
+
+            if (!fullPath.StartsWith(wwwRoot, StringComparison.OrdinalIgnoreCase) || !File.Exists(fullPath))
             {
-                ctx.Response.ContentType = "text/html; charset=utf-8";
+                ctx.Response.StatusCode = 404;
+            }
+            else
+            {
+                var ext = Path.GetExtension(fullPath);
+                ctx.Response.ContentType = ContentTypes.TryGetValue(ext, out var ct) ? ct : "application/octet-stream";
+                var bytes = File.ReadAllBytes(fullPath);
                 ctx.Response.ContentLength64 = bytes.Length;
                 ctx.Response.OutputStream.Write(bytes, 0, bytes.Length);
             }
-            catch { /* client went away mid-response — nothing to do */ }
-            finally { ctx.Response.OutputStream.Close(); }
         }
+        catch { /* client went away mid-response — nothing to do */ }
+        finally { ctx.Response.OutputStream.Close(); }
     }
 
     private void StopServer()
