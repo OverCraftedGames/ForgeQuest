@@ -1,47 +1,41 @@
-# ForgeQuest — Android Wrapper (Capacitor)
+# ForgeQuest
 
-This is a Capacitor-wrapped Android build of the ForgeQuest HTML game.
+A blacksmith-shop crafting game — mine ore, run the forge, fulfill orders,
+fuse and discover new sword recipes.
 
-## What's included
-- `www/index.html` — the game itself (same file as the standalone web version)
-- `android/` — a full, ready-to-build Android Studio / Gradle project
-- `capacitor.config.json` — app id `com.forgequest.app`, app name "ForgeQuest"
+**Active focus right now: Windows desktop (Steam track).** This is a small
+HTML/JS game (`www/index.html`) wrapped as a native-feeling Windows desktop
+app, with an eye toward eventual Steam release.
 
-## Why this needs to be built on your own machine
-This project was assembled in a sandboxed environment without access to Google's
-Android/Gradle servers, so the Gradle build itself could not be run here. Everything
-up to that point (npm install, `cap add android`, asset copying) is done and verified.
+## What's in this branch
 
-## How to finish the build
+- `www/index.html` — the game itself: all HTML/CSS/JS, self-contained, no
+  build step. This is the canonical, single source of truth for game logic —
+  edit this file, everything else just wraps it.
+- `desktop/ForgeQuestDesktop/` — the Windows desktop wrapper. A thin WinForms
+  shell hosting a `Microsoft.Web.WebView2` control pointed at a small local
+  HTTP server the app spins up itself (needed for stable `localStorage`
+  behavior — see that folder's own `README.md` for the full why/how).
 
-### Option A — Android Studio (easiest)
-1. Install Android Studio: https://developer.android.com/studio
-2. Open the `android/` folder as a project (File → Open).
-3. Let Gradle sync (this is the step that needs internet — it downloads the
-   Android Gradle Plugin, Gradle itself, and SDK platform files automatically).
-4. Click Run ▶ with an emulator or a plugged-in device, or
-   Build → Generate Signed Bundle/APK for a real APK/AAB to install or upload.
+Full build, run, and packaging instructions live in
+[`desktop/ForgeQuestDesktop/README.md`](desktop/ForgeQuestDesktop/README.md).
 
-### Option B — Command line
-Requires the Android SDK + `ANDROID_HOME` set up already.
-```
-cd android
-./gradlew assembleDebug
-```
-The APK will land in `android/app/build/outputs/apk/debug/app-debug.apk`.
+## Android
 
-## Updating the game later
-If you edit the HTML file, just replace `www/index.html` with the new version and run:
-```
-npm install
-npx cap sync android
-```
-then rebuild in Android Studio.
+The Android (Capacitor) wrapper isn't part of active development right now.
+It's preserved as-is on the [`android` branch](../../tree/android) and can be
+picked back up later without losing any of that work.
 
-## Icons / splash screen
-Capacitor ships default placeholder icons. To set your own, use:
-```
-npx @capacitor/assets generate --iconBackgroundColor '#1b1712' --splashBackgroundColor '#1b1712'
-```
-(after dropping a 1024x1024 icon.png and splash.png into a `resources/` folder — see
-https://capacitorjs.com/docs/guides/splash-screens-and-icons for details).
+## Save data
+
+Local save via `localStorage`, versioned (`forgequest_save_v1`). On desktop
+this lives in the WebView2 profile under
+`%LOCALAPPDATA%\ForgeQuest\WebView2\` — see the desktop README for details.
+
+## Steam
+
+No Steamworks integration yet in this codebase — that's expected to land as
+its own layer around the existing save/friends systems once the desktop
+build is stable. (There's a separate Unity prototype,
+`Unity_Restart/ForgeQuest_Steam`, exploring a native Steam-first rebuild;
+this repo and that one are independent efforts for now.)
