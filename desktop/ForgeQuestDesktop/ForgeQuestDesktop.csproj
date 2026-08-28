@@ -9,6 +9,11 @@
     <AssemblyName>ForgeQuest</AssemblyName>
     <RootNamespace>ForgeQuestDesktop</RootNamespace>
     <ApplicationIcon>Resources\app.ico</ApplicationIcon>
+    <!-- Bump this before every shared/exported build (see SESSION_NOTES.md "Versioning shared builds").
+         Drives the exe's own file-properties version AND the exported filename. -->
+    <Version>0.0.3</Version>
+    <FileVersion>0.0.3.0</FileVersion>
+    <AssemblyVersion>0.0.3.0</AssemblyVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -19,6 +24,13 @@
     <!-- Always pull the live canonical file at build/publish time — no manual
          sync step to forget, unlike the Android assets copy. -->
     <None Include="..\..\www\index.html" Link="www\index.html" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Music tracks — too big to inline as data URIs like the rest of the
+         game's assets, so they ship as real files the local server routes to
+         by path (see MainForm.cs's ServeLoop). -->
+    <None Include="..\..\www\audio\**\*.*">
+      <Link>www\audio\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>
