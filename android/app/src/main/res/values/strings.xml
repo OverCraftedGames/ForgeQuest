@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">ForgeQuest</string>
+    <string name="title_activity_main">ForgeQuest</string>
+    <string name="package_name">com.forgequest.app</string>
+    <string name="custom_url_scheme">com.forgequest.app</string>
+</resources>

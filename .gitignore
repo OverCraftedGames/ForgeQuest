@@ -1,0 +1,19 @@
+# Node
+node_modules/
+npm-debug.log*
+
+# .NET desktop wrapper build output
+desktop/ForgeQuestDesktop/bin/
+desktop/ForgeQuestDesktop/obj/
+desktop/ForgeQuestDesktop/publish/
+
+# Android build output (android/.gitignore already covers most of this;
+# this is a backstop in case that file ever gets deleted/edited)
+android/app/build/
+android/build/
+android/.gradle/
+android/local.properties
+
+# OS junk
+.DS_Store
+Thumbs.db
