@@ -1,41 +1,43 @@
 # ForgeQuest
 
-A blacksmith-shop crafting game — mine ore, run the forge, fulfill orders,
-fuse and discover new sword recipes.
+**Run a blacksmith shop. Mine your own ore, work the forge, fill orders for
+your customers, and fuse swords together to discover new, rarer recipes.**
 
-**Active focus right now: Windows desktop (Steam track).** This is a small
-HTML/JS game (`www/index.html`) wrapped as a native-feeling Windows desktop
-app, with an eye toward eventual Steam release.
+ForgeQuest is a cozy crafting/idle game from [OverCrafted Games](https://ocgames.xyz).
+Send friends out to visit your shop while you're away, chase down every
+achievement, and slowly climb from a one-table workshop to a proper forge.
 
-## What's in this branch
+Currently in active development, with Windows desktop as the primary target
+on the way to a Steam release.
 
-- `www/index.html` — the game itself: all HTML/CSS/JS, self-contained, no
-  build step. This is the canonical, single source of truth for game logic —
-  edit this file, everything else just wraps it.
-- `desktop/ForgeQuestDesktop/` — the Windows desktop wrapper. A thin WinForms
-  shell hosting a `Microsoft.Web.WebView2` control pointed at a small local
-  HTTP server the app spins up itself (needed for stable `localStorage`
-  behavior — see that folder's own `README.md` for the full why/how).
+## Status
 
-Full build, run, and packaging instructions live in
-[`desktop/ForgeQuestDesktop/README.md`](desktop/ForgeQuestDesktop/README.md).
+🔨 **Early development.** The core loop (mining, crafting, orders, fusion,
+achievements) is playable today; Steam integration hasn't landed yet. Expect
+frequent changes and the occasional rough edge.
 
-## Android
+## Playing it
 
-The Android (Capacitor) wrapper isn't part of active development right now.
-It's preserved as-is on the [`android` branch](../../tree/android) and can be
-picked back up later without losing any of that work.
+The game itself is a single self-contained web app (`www/index.html`), no
+build step, no dependencies. The primary way to play is the Windows desktop
+build, a small native wrapper around that same web app:
+
+- Build/run/package instructions: [`desktop/ForgeQuestDesktop/README.md`](desktop/ForgeQuestDesktop/README.md)
+
+An Android build also exists, preserved on the [`android` branch](../../tree/android),
+though it isn't under active development right now.
 
 ## Save data
 
-Local save via `localStorage`, versioned (`forgequest_save_v1`). On desktop
-this lives in the WebView2 profile under
-`%LOCALAPPDATA%\ForgeQuest\WebView2\` — see the desktop README for details.
+Progress saves locally and automatically, no account needed. On desktop,
+saves live in the WebView2 profile under `%LOCALAPPDATA%\ForgeQuest\WebView2\`
+(see the desktop README for details).
 
-## Steam
+## Roadmap
 
-No Steamworks integration yet in this codebase — that's expected to land as
-its own layer around the existing save/friends systems once the desktop
-build is stable. (There's a separate Unity prototype,
-`Unity_Restart/ForgeQuest_Steam`, exploring a native Steam-first rebuild;
-this repo and that one are independent efforts for now.)
+- [ ] Steamworks integration (achievements, cloud saves, friends)
+- [ ] Continued balance and content passes on crafting, fusion, and orders
+
+## Contact
+
+Questions, feedback, or bugs: [contact@ocgames.xyz](mailto:contact@ocgames.xyz)
