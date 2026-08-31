@@ -109,6 +109,10 @@ public class MainForm : Form
         [".ogg"] = "audio/ogg",
         [".wav"] = "audio/wav",
         [".m4a"] = "audio/mp4",
+        [".png"] = "image/png",
+        [".jpg"] = "image/jpeg",
+        [".jpeg"] = "image/jpeg",
+        [".webp"] = "image/webp",
     };
 
     private int StartServer(string wwwRoot)

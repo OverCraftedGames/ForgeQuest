@@ -11,9 +11,9 @@
     <ApplicationIcon>Resources\app.ico</ApplicationIcon>
     <!-- Bump this before every shared/exported build (see SESSION_NOTES.md "Versioning shared builds").
          Drives the exe's own file-properties version AND the exported filename. -->
-    <Version>0.0.8</Version>
-    <FileVersion>0.0.8.0</FileVersion>
-    <AssemblyVersion>0.0.8.0</AssemblyVersion>
+    <Version>0.0.9</Version>
+    <FileVersion>0.0.9.0</FileVersion>
+    <AssemblyVersion>0.0.9.0</AssemblyVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -29,6 +29,21 @@
          by path (see MainForm.cs's ServeLoop). -->
     <None Include="..\..\www\audio\**\*.*">
       <Link>www\audio\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <!-- Sword sprites — one PNG per sword (85 total), shown in the new-sword
+         discovery popup. Same real-file treatment as the music tracks above,
+         not inlined as base64 (see MainForm.cs's ServeLoop / ContentTypes). -->
+    <None Include="..\..\www\swords\**\*.*">
+      <Link>www\swords\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <!-- Ingot icons — one per material, used on the ore-palette chips and the
+         crafting grid (placed/cooking/ready cells). Same real-file treatment;
+         at ~120KB each these are well past what's reasonable to inline like
+         the tiny HAMMER_ICON/NAV_ICONS data URIs. -->
+    <None Include="..\..\www\ingots\**\*.*">
+      <Link>www\ingots\%(RecursiveDir)%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
