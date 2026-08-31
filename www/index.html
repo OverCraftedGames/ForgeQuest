@@ -433,6 +433,15 @@
   .minesMapCol{display:flex;flex-direction:column;padding:24px;border-right:1.5px solid var(--border);min-width:0;}
   .minesDetailCol{display:flex;flex-direction:column;gap:8px;padding:22px 20px;position:relative;overflow-y:auto;min-width:0;}
   .mineMapModal{flex:1;height:auto;min-height:280px;margin-bottom:0;margin-top:10px;}
+  /* Single-column, unlike minesModal/catalogModal's map+detail split — a
+     friend's workshop is just one list of stations, no second pane needed
+     — but the same large-popout sizing/shell so it reads as the same kind
+     of "leave the tab, look at a whole other place" overlay. */
+  .friendVisitModal{
+    width:min(720px,92vw);height:min(600px,86vh);
+    background:#f5ead8;border:1.5px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);
+    padding:24px;overflow-y:auto;position:relative;
+  }
   .catalogModal{
     display:grid;grid-template-columns:340px 1fr;width:min(1100px,92vw);height:min(640px,86vh);
     background:#f5ead8;border:1.5px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);overflow:hidden;
@@ -2555,6 +2564,12 @@ async function visitFriend(id){
   if(id===JEAN_CLODE_ID) return; // no station data to visit — nothing in the UI links here anyway, just defensive
   state.visitingFriendId = id;
   state.visitingFriendData = {loading:true};
+  // Same mutual-exclusion convention as every other modal-opening toggle
+  // (see toggleMineOverview()) — this is now a popout like Mines/Catalog,
+  // not an in-tab panel, so it shouldn't stack behind/under one of those.
+  state.mineOpen=false; state.catalogOpen=false; state.settingsOpen=false; state.hammerInventoryOpen=false;
+  state.swordInventoryModalOpen=false; state.tutorialOpen=false; state.achievementsOpen=false; state.wheelOpen=false;
+  state.expeditionsOpen=false;
   render();
   const snapshot = await fetchFriendSnapshot(id);
   const friend = state.friends.find(f=>f.id===id);
@@ -3576,24 +3591,32 @@ function renderCatalogOverview(){
 
 function initials(name){ return name.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase(); }
 
-function renderFriendVisit(friend){
+// A real popout modal, not an in-tab panel swap — matches renderMineOverview()'s
+// treatment (a whole separate place you're looking at, not just this tab's
+// content changing) rather than the old single-column-panel version. Comes
+// through the same modal-dispatch chain as Mines/Catalog/Settings/etc. in
+// render(), gated on state.visitingFriendId — see visitFriend()/leaveVisit().
+function renderFriendVisitModal(){
+  const friend = state.friends.find(f=>f.id===state.visitingFriendId);
+  if(!friend){ state.visitingFriendId = null; state.visitingFriendData = null; return ''; }
   const label = friend.displayName || friend.friendCode;
-  const header = `<div class="row" style="justify-content:space-between;">
-      <div class="section-title" style="border:none;margin:0;">Visiting ${label}'s workshop</div>
-      <div class="row" style="gap:6px;">
-        <button onclick="refreshVisit()">Refresh</button>
-        <button onclick="leaveVisit()">Back to friends</button>
+  const header = `<button class="navClose" onclick="leaveVisit()">Close &times;</button>
+    <div class="row" style="justify-content:space-between;align-items:flex-start;padding-right:70px;">
+      <div>
+        <span class="wf-lbl small">Visiting</span>
+        <h3 class="section-title" style="margin:2px 0 8px;">${label}'s workshop</h3>
       </div>
+      <button onclick="refreshVisit()">Refresh</button>
     </div>`;
   const data = state.visitingFriendData;
   if(!data || data.loading){
-    return `<div class="panel">${header}<div class="small" style="margin-top:10px;">Loading their workshop&hellip;</div></div>`;
+    return `<div class="modalBackdrop" onclick="leaveVisit()"><div class="friendVisitModal" onclick="event.stopPropagation()">${header}<div class="small" style="margin-top:10px;">Loading their workshop&hellip;</div></div></div>`;
   }
   if(data.error){
-    return `<div class="panel">${header}<div class="small" style="margin-top:10px;">Couldn't reach the friends server &mdash; try again in a moment.</div></div>`;
+    return `<div class="modalBackdrop" onclick="leaveVisit()"><div class="friendVisitModal" onclick="event.stopPropagation()">${header}<div class="small" style="margin-top:10px;">Couldn't reach the friends server &mdash; try again in a moment.</div></div></div>`;
   }
   if(data.notSynced){
-    return `<div class="panel">${header}<div class="small" style="margin-top:10px;">${label} hasn't opened ForgeQuest since you added them &mdash; nothing to show yet.</div></div>`;
+    return `<div class="modalBackdrop" onclick="leaveVisit()"><div class="friendVisitModal" onclick="event.stopPropagation()">${header}<div class="small" style="margin-top:10px;">${label} hasn't opened ForgeQuest since you added them &mdash; nothing to show yet.</div></div></div>`;
   }
   const stations = data.stations||[];
   const sentHits = loadSentFriendHits();
@@ -3632,19 +3655,17 @@ function renderFriendVisit(friend){
       </div>`;
     }).join('');
   }).join('') : `<div class="small">Nothing on their workbench yet.</div>`;
-  return `<div class="panel">${header}
-    <div class="small" style="margin-bottom:10px;">Business level ${data.businessLevel}. Give a ready station a hammer hit using one of your own hammers to help &mdash; you'll get a small thank-you reward.</div>
+  return `<div class="modalBackdrop" onclick="leaveVisit()"><div class="friendVisitModal" onclick="event.stopPropagation()">${header}
+    <div class="small" style="margin:10px 0;">Business level ${data.businessLevel}. Give a ready station a hammer hit using one of your own hammers to help &mdash; you'll get a small thank-you reward.</div>
     ${stationRows}
-  </div>`;
+  </div></div>`;
 }
 
+// The roster only — visiting a specific friend is its own popout modal now
+// (renderFriendVisitModal(), dispatched from render() alongside Mines/
+// Settings/etc.), not an in-tab content swap, so this never needs to check
+// state.visitingFriendId at all.
 function renderFriends(){
-  if(state.visitingFriendId){
-    const friend = state.friends.find(f=>f.id===state.visitingFriendId);
-    if(friend) return renderFriendVisit(friend);
-    state.visitingFriendId = null;
-    state.visitingFriendData = null;
-  }
   // Jean Clode always sorts first, regardless of where he sits in the
   // underlying array — pinned to the top of the list per how he's meant to
   // read (a permanent fixture, not just another added friend).
@@ -4212,7 +4233,7 @@ function render(){
   const debugPanel = document.getElementById('debugPanel');
   if(debugPanel) debugPanel.innerHTML = renderDebug();
   const modalRoot = document.getElementById('modalRoot');
-  if(modalRoot) modalRoot.innerHTML = state.usernamePromptOpen ? renderUsernamePromptModal() : (state.friendHitPopup ? renderFriendHitPopup() : (state.newSwordPopup ? renderNewSwordPopup() : (state.expeditionResultQueue.length ? renderExpeditionResultPopup() : (state.dailyRewardPopup ? renderDailyRewardPopup() : (state.tutorialOpen ? renderTutorialModal() : (state.mineOpen ? renderMineOverview() : (state.catalogOpen ? renderCatalogOverview() : (state.settingsOpen ? renderSettingsModal() : (state.swordInventoryModalOpen ? renderInventoryModal() : (state.achievementsOpen ? renderAchievementsModal() : (state.wheelOpen ? renderWheelModal() : (state.expeditionsOpen ? renderExpeditionOverview() : ''))))))))))));
+  if(modalRoot) modalRoot.innerHTML = state.usernamePromptOpen ? renderUsernamePromptModal() : (state.friendHitPopup ? renderFriendHitPopup() : (state.newSwordPopup ? renderNewSwordPopup() : (state.expeditionResultQueue.length ? renderExpeditionResultPopup() : (state.dailyRewardPopup ? renderDailyRewardPopup() : (state.tutorialOpen ? renderTutorialModal() : (state.mineOpen ? renderMineOverview() : (state.catalogOpen ? renderCatalogOverview() : (state.settingsOpen ? renderSettingsModal() : (state.swordInventoryModalOpen ? renderInventoryModal() : (state.achievementsOpen ? renderAchievementsModal() : (state.wheelOpen ? renderWheelModal() : (state.expeditionsOpen ? renderExpeditionOverview() : (state.visitingFriendId ? renderFriendVisitModal() : '')))))))))))));
   const app = document.getElementById('app');
   const meta = TAB_META[state.tab] || TAB_META.workshop;
   const mainContent = state.tab==='shop' ? renderShop() : state.tab==='workshop' ? renderWorkshop() : state.tab==='orders' ? renderOrders() : renderFriends();
