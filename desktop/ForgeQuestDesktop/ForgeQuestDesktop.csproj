@@ -11,9 +11,9 @@
     <ApplicationIcon>Resources\app.ico</ApplicationIcon>
     <!-- Bump this before every shared/exported build (see SESSION_NOTES.md "Versioning shared builds").
          Drives the exe's own file-properties version AND the exported filename. -->
-    <Version>0.0.11</Version>
-    <FileVersion>0.0.11.0</FileVersion>
-    <AssemblyVersion>0.0.11.0</AssemblyVersion>
+    <Version>0.0.12</Version>
+    <FileVersion>0.0.12.0</FileVersion>
+    <AssemblyVersion>0.0.12.0</AssemblyVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -38,12 +38,30 @@
       <Link>www\swords\%(RecursiveDir)%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <!-- Nameplate-free variants of the same 85 sprites, one-to-one by filename
+         (SWORD_SPRITE_NOTITLE derives each path from SWORD_SPRITE at runtime,
+         not a second hand-typed map) — used for the small crafting-in-progress
+         preview, where a small icon reads better without a big text banner. -->
+    <None Include="..\..\www\swords_notitle\**\*.*">
+      <Link>www\swords_notitle\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <!-- Ingot icons — one per material, used on the ore-palette chips and the
          crafting grid (placed/cooking/ready cells). Same real-file treatment;
          at ~120KB each these are well past what's reasonable to inline like
          the tiny HAMMER_ICON/NAV_ICONS data URIs. -->
     <None Include="..\..\www\ingots\**\*.*">
       <Link>www\ingots\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <!-- Background art — the body/workshop-panel/mine-map JPEGs and the 5
+         crafting-table tier backdrops (CRAFT_TABLE_BG), plus the Expeditions
+         nav button's art (NAV_BG_IMAGES) — moved out of index.html's base64
+         (was ~3MB of it) for the same reasoning as every other real-file
+         asset above, and because a single-file update on Steam would
+         otherwise invalidate this whole blob on every patch. -->
+    <None Include="..\..\www\backgrounds\**\*.*">
+      <Link>www\backgrounds\%(RecursiveDir)%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
