@@ -867,6 +867,8 @@ function claimDailyLogin(){
   render();
 }
 
+function dismissFriendHitPopup(){ state.friendHitPopup = null; render(); }
+
 /* A crafting table is a grid you place ore into; upgrading it adds a row or column,
    growing it along this fixed sequence of [rows, cols] instead of a speed/quality level. */
 const GRID_TIERS = [[2,2],[2,3],[3,3],[3,4],[4,4]];
@@ -967,6 +969,29 @@ function loadFriendIdentity(){
 }
 function saveFriendIdentity(identity){
   try{ localStorage.setItem(FRIEND_IDENTITY_KEY, JSON.stringify(identity)); }catch(e){}
+}
+
+// Remembers every hammer hit this install has SENT to a friend's craft, so
+// hitting Refresh (or leaving and revisiting) can't be used to hammer the
+// same craft with the same hammer over and over: the fetched snapshot
+// only reflects the effect once the FRIEND syncs after applying it (could
+// be minutes away), so hammersUsed/smithHitBy in visitingFriendData can't
+// be trusted alone to prevent a resend — this is the actual source of
+// truth on the sending side. Keyed by target+craft+hammer, not persisted
+// per-friend, since a craft id is never reused once collected.
+const SENT_FRIEND_HITS_KEY = 'forgequest_sent_friend_hits_v1';
+function sentHitKey(targetPlayerId, craftId, hammerId){ return targetPlayerId+':'+craftId+':'+hammerId; }
+function loadSentFriendHits(){
+  try{ return new Set(JSON.parse(localStorage.getItem(SENT_FRIEND_HITS_KEY))||[]); }catch(e){ return new Set(); }
+}
+function saveSentFriendHits(set){
+  try{
+    // Capped, not because this needs to be small right now, but because
+    // it otherwise grows forever across a whole install's lifetime — old
+    // entries are for crafts collected long ago and can never be looked up
+    // again anyway.
+    localStorage.setItem(SENT_FRIEND_HITS_KEY, JSON.stringify(Array.from(set).slice(-200)));
+  }catch(e){}
 }
 
 // Every authenticated call (station upload, sending/draining hits) needs
@@ -1119,6 +1144,7 @@ async function checkFriendPendingHits(){
   }catch(e){ return; }
   if(!hits || !hits.length) return;
   let applied = 0;
+  const hitBy = new Set();
   hits.forEach(hit=>{
     let payload;
     try{ payload = JSON.parse(hit.payloadJson); }catch(e){ return; }
@@ -1128,10 +1154,21 @@ async function checkFriendPendingHits(){
     if(!c || !c.ready) return; // already collected/changed since it was queued — skip
     const hitsBefore = c.hits;
     hammerHit(payload.stationIdx, payload.craftId, payload.hammerId, hit.fromPlayerId);
-    if(c.hits>hitsBefore) applied++;
+    if(c.hits>hitsBefore){
+      applied++;
+      // hit.fromDisplayName is whatever the sender's name was AT SEND TIME
+      // (server-looked-up, see the backend's PendingHitEndpoints) — good
+      // enough for a one-off popup, no need to cross-reference state.friends.
+      hitBy.add(hit.fromDisplayName || 'A friend');
+    }
   });
   if(applied>0){
-    setToast('🔨 A friend hammered '+applied+' of your ready sword'+(applied===1?'':'s')+' while you were away!');
+    // A real popup, not just a toast — this is exactly the kind of thing a
+    // toast can silently miss if it fires while the player's looking
+    // elsewhere (see showNewSwordPopup()'s identical "sound plays right
+    // when the state is set" pattern, not tied to render()).
+    state.friendHitPopup = {count: applied, names: Array.from(hitBy)};
+    playHammerHitSfx();
     saveGame();
     render();
   }
@@ -1207,6 +1244,10 @@ const state = {
   dailyStreak:0,
   lastDailyClaim:null,
   dailyRewardPopup:null,
+  // Set by checkFriendPendingHits() when a friend's queued hammer hit(s)
+  // actually applied — not persisted, same as every other popup-open flag
+  // (a reload finding it gone just means "you already saw it").
+  friendHitPopup:null,
   // Expeditions (see the EXPEDITIONS section). expeditionRequests (the
   // currently-offered, uncommitted pool), activeExpeditions (departed, still
   // resolving), AND expeditionResultQueue ARE persisted — unlike
@@ -2215,7 +2256,12 @@ function hammerHit(stationIdx, craftId, hammerId, sourceId){
   const c = st.craftings.find(x=>x.id===craftId);
   state.openHammerRadial = null;
   if(!c || !c.ready) { render(); return; }
-  if(!hammerCanUse(hammerId)) { render(); return; }
+  // Only the player's own click needs to actually OWN a hammer of this
+  // type — a remote friend's hit (sourceId !== 'player') already spent
+  // THEIRS when they sent it (see hammerFriendCraft()), so gating on this
+  // client's own inventory here would silently drop a friend's genuine hit
+  // just because the receiver happens to have zero of that hammer type.
+  if(sourceId==='player' && !hammerCanUse(hammerId)) { render(); return; }
   if(!c.smithHitBy) c.smithHitBy = []; // defensive: saves from before this field existed
   if(hammerId==='smith'){
     if(c.smithHitBy.includes(sourceId)) { render(); return; }
@@ -2422,13 +2468,38 @@ function tickJeanClaude(){
 // server-side). Returns null if they haven't synced yet or the request
 // fails — callers already have a sensible fallback (the friend code) for
 // exactly that case.
-async function fetchDisplayName(playerId){
+// The one place that knows how to fetch + parse a player's station
+// snapshot — used by addFriendByCode() (grabbing a name at add-time),
+// visitFriend() (the full visit view), and refreshFriendsRoster() (the
+// roster's per-friend mini-status). Returns {notSynced:true}, {error:true},
+// or {displayName, businessLevel, stations} — never throws.
+async function fetchFriendSnapshot(playerId){
   try{
+    // no-store: every caller here wants "what's actually true right now",
+    // never a cached response — see the tick loop's own comment for why
+    // craft state can go stale fast and a re-check expects that to mean
+    // something.
     const resp = await fetch(FRIENDS_API_BASE+'/api/stations/'+encodeURIComponent(playerId), {cache:'no-store'});
-    if(!resp.ok) return null;
-    const data = await resp.json();
-    return data.displayName || null;
-  }catch(e){ return null; }
+    if(resp.status===404) return {notSynced:true};
+    if(!resp.ok) return {error:true};
+    const raw = await resp.json();
+    // raw.snapshotJson is a STRING (the DB column) — the actual stations/
+    // craftings array is nested inside it, not a top-level response field.
+    let parsed;
+    try{ parsed = JSON.parse(raw.snapshotJson); }catch(e){ parsed = {}; }
+    return {displayName: raw.displayName, businessLevel: raw.businessLevel, stations: parsed.stations||[]};
+  }catch(e){ return {error:true}; }
+}
+
+// Opportunistically refreshes a friend-list entry's cached
+// displayName/stations from a fetch result — usernames never change once
+// set (see saveUsername()), so this only ever fills in/updates toward the
+// truth, never overwrites something real with something older.
+function applyFriendSnapshotToEntry(friend, snapshot){
+  if(!friend || !snapshot || snapshot.notSynced || snapshot.error) return;
+  if(snapshot.displayName) friend.displayName = snapshot.displayName;
+  friend.businessLevel = snapshot.businessLevel;
+  friend.stations = snapshot.stations;
 }
 
 async function addFriendByCode(){
@@ -2445,16 +2516,15 @@ async function addFriendByCode(){
       return;
     }
     const data = await resp.json();
-    // Grab their current name if they've synced already — usernames are
-    // never changed once set (see saveUsername()), so this can never go
-    // stale; if they haven't synced yet, displayName stays null and the
-    // roster falls back to the friend code until a future visit fills it
-    // in (see visitFriend()).
-    const displayName = await fetchDisplayName(data.playerId);
-    state.friends.push({id:data.playerId, friendCode:data.friendCode, displayName});
+    const friend = {id:data.playerId, friendCode:data.friendCode, displayName:null};
+    // Grab their current name/board (if they've synced already) right
+    // away, same as refreshFriendsRoster() would the next time this list
+    // is opened — no reason to make the player wait for that.
+    applyFriendSnapshotToEntry(friend, await fetchFriendSnapshot(data.playerId));
+    state.friends.push(friend);
     input.value='';
     saveGame();
-    setToast('Added '+(displayName||data.friendCode)+' as a friend!');
+    setToast('Added '+(friend.displayName||friend.friendCode)+' as a friend!');
     render();
   }catch(e){
     setToast("Couldn't reach the friends server — try again in a moment.");
@@ -2467,37 +2537,29 @@ function removeFriend(id){
   saveGame();
   render();
 }
+// Refreshes every real friend's cached name/board state in one pass —
+// called on entering the Friends tab (see setTab()) so the roster's
+// mini-status dots reflect something recent rather than whatever was
+// cached at add-time/last-visit, potentially a long time ago. Parallel,
+// not sequential: this is a handful of small independent GETs, no reason
+// to make them wait on each other.
+async function refreshFriendsRoster(){
+  const real = state.friends.filter(f=>!f.bot);
+  if(!real.length) return;
+  await Promise.all(real.map(async f=>{
+    applyFriendSnapshotToEntry(f, await fetchFriendSnapshot(f.id));
+  }));
+  render();
+}
 async function visitFriend(id){
   if(id===JEAN_CLODE_ID) return; // no station data to visit — nothing in the UI links here anyway, just defensive
   state.visitingFriendId = id;
   state.visitingFriendData = {loading:true};
   render();
-  try{
-    // no-store: this is a live "what's on their bench right now" check,
-    // not something that should ever come back from a cached response —
-    // see the tick loop's own comment for why craft state can go stale
-    // fast and a visitor re-checking expects that to actually mean something.
-    const resp = await fetch(FRIENDS_API_BASE+'/api/stations/'+encodeURIComponent(id), {cache:'no-store'});
-    if(resp.status===404){ state.visitingFriendData = {notSynced:true}; }
-    else if(!resp.ok){ state.visitingFriendData = {error:true}; }
-    else {
-      const raw = await resp.json();
-      // raw.snapshotJson is a STRING (the DB column) — the actual
-      // stations/craftings array renderFriendVisit()/hammerFriendCraft()
-      // read is nested inside it, not a top-level field of the response.
-      let parsed;
-      try{ parsed = JSON.parse(raw.snapshotJson); }catch(e){ parsed = {}; }
-      state.visitingFriendData = {businessLevel: raw.businessLevel, stations: parsed.stations||[]};
-      // Opportunistically refresh this friend's cached display name too —
-      // usernames never change once set (see saveUsername()), so this only
-      // ever fills in a name that was missing before, never overwrites a
-      // real one with something older.
-      const friend = state.friends.find(f=>f.id===id);
-      if(friend && raw.displayName) friend.displayName = raw.displayName;
-    }
-  }catch(e){
-    state.visitingFriendData = {error:true};
-  }
+  const snapshot = await fetchFriendSnapshot(id);
+  const friend = state.friends.find(f=>f.id===id);
+  applyFriendSnapshotToEntry(friend, snapshot);
+  state.visitingFriendData = snapshot;
   // The player may have already hit "Back to friends" (or started visiting
   // someone else) before this resolved — don't let a stale fetch stomp a
   // newer/cleared view.
@@ -2535,6 +2597,12 @@ async function hammerFriendCraft(targetPlayerId, stationIdx, craftId, hammerId){
   } else if(c.hammersUsed.includes(hammerId)){
     return;
   }
+  // The real guard against Refresh-spamming the same hit — see
+  // loadSentFriendHits()'s doc comment for why the checks above (against
+  // the fetched snapshot) aren't enough on their own.
+  const sentHits = loadSentFriendHits();
+  const key = sentHitKey(targetPlayerId, craftId, hammerId);
+  if(sentHits.has(key)){ setToast("You've already hit that one."); return; }
 
   if(hammerId!=='smith') state.hammerInventory[hammerId] -= 1;
   state.gold += 5;
@@ -2547,6 +2615,8 @@ async function hammerFriendCraft(targetPlayerId, stationIdx, craftId, hammerId){
   // without waiting on a re-fetch.
   if(hammerId==='smith'){ (c.smithHitBy = c.smithHitBy||[]).push(state.friendPlayerId); }
   else { c.hammersUsed.push(hammerId); }
+  sentHits.add(key);
+  saveSentFriendHits(sentHits);
   saveGame();
   render();
 
@@ -2740,7 +2810,15 @@ function scrapSword(id){
   setToast('Scrapped '+s.name+' for '+refund.toLocaleString()+' gold.');
   render();
 }
-function setTab(t){ state.tab=t; if(t==='orders') ensureGuaranteedOrder(); render(); }
+function setTab(t){
+  state.tab=t;
+  if(t==='orders') ensureGuaranteedOrder();
+  // Not awaited — same reasoning as every other friends-backend call, this
+  // must never delay the tab actually switching. Refreshes in place and
+  // re-renders itself once the fetches land (see refreshFriendsRoster()).
+  if(t==='friends') refreshFriendsRoster();
+  render();
+}
 function toggleMineOverview(){ state.mineOpen = !state.mineOpen; if(state.mineOpen){ state.catalogOpen=false; state.settingsOpen=false; state.hammerInventoryOpen=false; state.swordInventoryModalOpen=false; state.tutorialOpen=false; state.achievementsOpen=false; state.wheelOpen=false; state.newSwordPopup=null; state.dailyRewardPopup=null; state.expeditionsOpen=false; } render(); }
 function closeMineOverview(){ state.mineOpen = false; render(); }
 function selectMine(id){ state.selectedMineId = state.selectedMineId===id ? null : id; render(); }
@@ -3518,6 +3596,7 @@ function renderFriendVisit(friend){
     return `<div class="panel">${header}<div class="small" style="margin-top:10px;">${label} hasn't opened ForgeQuest since you added them &mdash; nothing to show yet.</div></div>`;
   }
   const stations = data.stations||[];
+  const sentHits = loadSentFriendHits();
   const stationRows = stations.length ? stations.map(st=>{
     if(!st.craftings.length){
       return `<div class="visitStation"><div>Station ${st.stationIdx+1}</div><div class="small">Nothing cooking.</div></div>`;
@@ -3531,8 +3610,13 @@ function renderFriendVisit(friend){
       // have hit this craft, not once it's been hit at all — same "once
       // per source" rule hammerHit() uses for the player's own crafts, so
       // a second friend visiting wouldn't find themselves already locked
-      // out just because you went first.
+      // out just because you went first. Also excluded once sentHits says
+      // you've already sent this exact hit — the fetched snapshot alone
+      // can't tell you that (see loadSentFriendHits()'s doc comment), so a
+      // Refresh (or a leave/revisit) can't be used to re-hit the same
+      // craft over and over.
       const options = POST_COOK_HAMMERS.filter(h=>{
+        if(sentHits.has(sentHitKey(friend.id, c.craftId, h.id))) return false;
         if(h.id==='smith') return !(c.smithHitBy||[]).includes(state.friendPlayerId);
         return !c.hammersUsed.includes(h.id);
       }).filter(h=>hammerCanUse(h.id));
@@ -3581,16 +3665,28 @@ function renderFriends(){
         </div>
       </div>`;
     }
-    // f.displayName is cached from add-time/last-visit (see
-    // addFriendByCode()/visitFriend()) — falls back to the friend code
-    // until they've synced at least once and we've actually seen it.
+    // f.displayName/f.stations are cached from add-time/last-visit/last
+    // roster refresh (see addFriendByCode()/visitFriend()/
+    // refreshFriendsRoster()) — displayName falls back to the friend code
+    // until they've synced at least once; stations falls back to a generic
+    // line until we've fetched them at all.
     const label = f.displayName || f.friendCode;
+    const stations = f.stations||[];
+    const mini = stations.map(st=>{
+      const cls = st.craftings.some(c=>c.ready) ? 'ready' : st.craftings.some(c=>!c.ready) ? 'crafting' : 'idle';
+      return `<div class="miniStation ${cls}"></div>`;
+    }).join('');
+    const readyCount = stations.filter(st=>st.craftings.some(c=>c.ready)).length;
+    const statusLine = stations.length
+      ? (readyCount ? readyCount+' station'+(readyCount>1?'s':'')+' ready for a hammer hit' : 'Nothing ready right now')
+      : "Visit to see what's on their workbench.";
     return `<div class="friendCard">
       <div class="friendInfo">
         <div class="avatar">${initials(label)}</div>
         <div>
           <b>${label}</b>
-          <div class="small" style="margin-top:4px;">Visit to see what's on their workbench.</div>
+          ${mini ? `<div class="miniStations" style="margin-top:4px;">${mini}</div>` : ''}
+          <div class="small" style="margin-top:4px;">${statusLine}</div>
         </div>
       </div>
       <div class="row" style="gap:6px;">
@@ -3869,6 +3965,26 @@ function renderDailyRewardPopup(){
   </div>`;
 }
 
+function renderFriendHitPopup(){
+  const popup = state.friendHitPopup;
+  if(!popup) return '';
+  const who = popup.names.length<=2 ? popup.names.join(' and ') : popup.names.length+' friends';
+  return `<div class="modalBackdrop" onclick="dismissFriendHitPopup()">
+    <div class="modalCard newSwordModalCard" onclick="event.stopPropagation()">
+      <div class="newSwordBadge">&#128296; While you were away</div>
+      <div class="newSwordArtPanel" style="padding:26px 20px;flex-direction:column;gap:8px;">
+        <div style="font-size:40px;">&#128296;</div>
+        <div style="font:400 20px/1.3 var(--font-heading);color:var(--gold);text-align:center;">
+          ${who} hammered ${popup.count} of your ready sword${popup.count===1?'':'s'}!
+        </div>
+      </div>
+      <div class="row" style="justify-content:center;gap:10px;margin-top:14px;">
+        <button class="primary" onclick="dismissFriendHitPopup()">Nice!</button>
+      </div>
+    </div>
+  </div>`;
+}
+
 // The mines overlay is a split-panel modal: the map (with clickable site
 // nodes) on the left, and the selected site's stats/actions on the right.
 function minePendingTotal(mine){ return Object.values(mine.pending||{}).reduce((a,b)=>a+b,0); }
@@ -4096,7 +4212,7 @@ function render(){
   const debugPanel = document.getElementById('debugPanel');
   if(debugPanel) debugPanel.innerHTML = renderDebug();
   const modalRoot = document.getElementById('modalRoot');
-  if(modalRoot) modalRoot.innerHTML = state.usernamePromptOpen ? renderUsernamePromptModal() : (state.newSwordPopup ? renderNewSwordPopup() : (state.expeditionResultQueue.length ? renderExpeditionResultPopup() : (state.dailyRewardPopup ? renderDailyRewardPopup() : (state.tutorialOpen ? renderTutorialModal() : (state.mineOpen ? renderMineOverview() : (state.catalogOpen ? renderCatalogOverview() : (state.settingsOpen ? renderSettingsModal() : (state.swordInventoryModalOpen ? renderInventoryModal() : (state.achievementsOpen ? renderAchievementsModal() : (state.wheelOpen ? renderWheelModal() : (state.expeditionsOpen ? renderExpeditionOverview() : '')))))))))));
+  if(modalRoot) modalRoot.innerHTML = state.usernamePromptOpen ? renderUsernamePromptModal() : (state.friendHitPopup ? renderFriendHitPopup() : (state.newSwordPopup ? renderNewSwordPopup() : (state.expeditionResultQueue.length ? renderExpeditionResultPopup() : (state.dailyRewardPopup ? renderDailyRewardPopup() : (state.tutorialOpen ? renderTutorialModal() : (state.mineOpen ? renderMineOverview() : (state.catalogOpen ? renderCatalogOverview() : (state.settingsOpen ? renderSettingsModal() : (state.swordInventoryModalOpen ? renderInventoryModal() : (state.achievementsOpen ? renderAchievementsModal() : (state.wheelOpen ? renderWheelModal() : (state.expeditionsOpen ? renderExpeditionOverview() : ''))))))))))));
   const app = document.getElementById('app');
   const meta = TAB_META[state.tab] || TAB_META.workshop;
   const mainContent = state.tab==='shop' ? renderShop() : state.tab==='workshop' ? renderWorkshop() : state.tab==='orders' ? renderOrders() : renderFriends();
@@ -4153,6 +4269,7 @@ window.fulfillOrder = fulfillOrder;
 window.skipOrder = skipOrder;
 window.addFriendByCode = addFriendByCode;
 window.saveUsername = saveUsername;
+window.dismissFriendHitPopup = dismissFriendHitPopup;
 window.removeFriend = removeFriend;
 window.visitFriend = visitFriend;
 window.leaveVisit = leaveVisit;
