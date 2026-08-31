@@ -969,6 +969,16 @@ function saveFriendIdentity(identity){
   try{ localStorage.setItem(FRIEND_IDENTITY_KEY, JSON.stringify(identity)); }catch(e){}
 }
 
+// Every authenticated call (station upload, sending/draining hits) needs
+// this — a small helper so the header name/lookup lives in exactly one
+// place rather than copy-pasted at each call site. Reads fresh from
+// localStorage each time rather than trusting a cached copy, since it's
+// cheap and this is the one value that can never be silently stale.
+function friendAuthHeaders(){
+  const identity = loadFriendIdentity();
+  return identity ? {'X-Player-Secret': identity.authSecret} : {};
+}
+
 // Loads this install's existing friend-code identity, or registers a new
 // one if it doesn't have one yet — either way updates state.friend* and
 // re-renders. Called once at boot, deliberately NOT awaited there: this
@@ -983,6 +993,7 @@ async function registerOrLoadFriendIdentity(){
     state.friendCode = existing.friendCode;
     state.friendPlayerId = existing.playerId;
     state.friendStatus = 'ready';
+    startFriendBackendLoop();
     render();
     return;
   }
@@ -998,6 +1009,7 @@ async function registerOrLoadFriendIdentity(){
     state.friendCode = data.friendCode;
     state.friendPlayerId = data.playerId;
     state.friendStatus = 'ready';
+    startFriendBackendLoop();
   }catch(e){
     state.friendStatus = 'offline';
   }
@@ -1010,6 +1022,103 @@ function copyFriendCode(){
     ()=>setToast('Friend code copied!'),
     ()=>setToast('Could not copy — your code is '+state.friendCode)
   );
+}
+
+// Turns the player's own real crafting grid into the payload a friend's
+// "visit" fetches (see StationEndpoints.MaxSnapshotJsonLength on the
+// backend — this stays well under that). Deliberately just the stations/
+// craftings shape, not the whole save: a friend visiting shouldn't see
+// gold/gems/inventory, only what's actually cooking, same spirit as only
+// being able to hammer a station, never open someone else's shop.
+function buildStationSnapshotPayload(){
+  return {
+    // No display-name system exists yet (see PlayerEndpoints' by-code
+    // lookup, which likewise only ever returns a code) — the friend code
+    // doubles as the shown name until that's worth adding.
+    displayName: state.friendCode || 'A smith',
+    businessLevel: state.level,
+    snapshotJson: JSON.stringify({
+      stations: state.stations.filter(st=>st.unlocked).map((st, stationIdx)=>({
+        stationIdx,
+        craftings: st.craftings.map(c=>({
+          craftId: c.id,
+          ready: c.ready,
+          remainMs: Math.max(0, c.startAt+c.duration-Date.now()),
+          hammersUsed: c.hammersUsed,
+          smithHitBy: c.smithHitBy||[],
+        })),
+      })),
+    }),
+  };
+}
+
+// Best-effort background upload — a friend visiting always sees whatever
+// this last managed to push, never live data (see visitingFriendData's doc
+// comment). Silent on failure: this runs unattended every
+// FRIEND_SYNC_INTERVAL_MS, not from a click, so there's no useful place to
+// surface an error even if there were something actionable to say.
+async function syncStationSnapshot(){
+  if(state.friendStatus!=='ready') return;
+  try{
+    await fetch(FRIENDS_API_BASE+'/api/stations/me', {
+      method:'PUT',
+      headers: Object.assign({'Content-Type':'application/json'}, friendAuthHeaders()),
+      body: JSON.stringify(buildStationSnapshotPayload()),
+    });
+  }catch(e){ /* best-effort, see comment above */ }
+}
+
+// Drains this player's own pending-hits queue and actually applies each
+// one via the SAME hammerHit() the player's own clicks use — reusing its
+// existing multi-source smith-hit-cap mechanism (originally built for Jean
+// Clode, see hammerHit()'s smithHitBy branch) rather than inventing a
+// second code path for "someone else's hammer hit landed on my craft".
+// Every hit is re-validated against LIVE state before applying (station/
+// craft still exists, still ready) exactly like jeanClaudeHammerOnce()
+// rebuilds its candidate list fresh rather than trusting anything stale —
+// the sender's copy of this craft could easily be out of date by the time
+// this runs.
+async function checkFriendPendingHits(){
+  if(state.friendStatus!=='ready') return;
+  let hits;
+  try{
+    const resp = await fetch(FRIENDS_API_BASE+'/api/friends/me/pending-hits', { headers: friendAuthHeaders() });
+    if(!resp.ok) return;
+    hits = await resp.json();
+  }catch(e){ return; }
+  if(!hits || !hits.length) return;
+  let applied = 0;
+  hits.forEach(hit=>{
+    let payload;
+    try{ payload = JSON.parse(hit.payloadJson); }catch(e){ return; }
+    if(payload.type!=='hammerCraft') return;
+    const st = state.stations[payload.stationIdx];
+    const c = st && st.craftings.find(x=>x.id===payload.craftId);
+    if(!c || !c.ready) return; // already collected/changed since it was queued — skip
+    const hitsBefore = c.hits;
+    hammerHit(payload.stationIdx, payload.craftId, payload.hammerId, hit.fromPlayerId);
+    if(c.hits>hitsBefore) applied++;
+  });
+  if(applied>0){
+    setToast('🔨 A friend hammered '+applied+' of your ready sword'+(applied===1?'':'s')+' while you were away!');
+    saveGame();
+    render();
+  }
+}
+
+// Its own slower interval, deliberately NOT part of the 1s tick loop below
+// — these two hit the network, and this game's backend traffic should stay
+// "occasional small JSON", not once a second per player. Both functions
+// already no-op until friendStatus is 'ready', so calling this before
+// identity resolves (or if it never does) is harmless.
+const FRIEND_SYNC_INTERVAL_MS = 90*1000;
+let friendBackendLoopStarted = false;
+function startFriendBackendLoop(){
+  syncStationSnapshot();
+  checkFriendPendingHits();
+  if(friendBackendLoopStarted) return; // registerOrLoadFriendIdentity can reach here at most once per boot anyway, but don't stack a second interval if something ever changes that
+  friendBackendLoopStarted = true;
+  setInterval(()=>{ syncStationSnapshot(); checkFriendPendingHits(); }, FRIEND_SYNC_INTERVAL_MS);
 }
 
 const state = {
@@ -1091,27 +1200,33 @@ const state = {
   tutorialOpen:false,
   tutorialStep:0,
   shopSubTab:'ore',
-  // Jean Clode (JEAN_CLODE_ID) is a real, permanent bot helper — pinned to the
-  // top of the list and never removable, unlike f1-f3 below (a mockup that
-  // resets every load). stations:[] just so he doesn't break the tick loop's
-  // `state.friends.forEach(f=>f.stations.forEach(...))` below, which every
-  // other friend entry has.
+  // Jean Clode (JEAN_CLODE_ID) is a real, permanent bot helper — pinned to
+  // the top of the friends roster and never removable, unlike the real
+  // (backend-added) friends below.
   // jeanClaudeInterval() is a function declaration (hoisted), so it's already
   // callable here even though it's textually defined much later in the file —
   // keeps this in sync with the real per-visit schedule instead of duplicating
   // the same min/range numbers in two places.
   jeanClaudeNextVisitAt: Date.now() + jeanClaudeInterval(),
+  // Real friends — a personal list of {id:playerId, friendCode} the player
+  // has added, backed by ForgeQuest-Backend (see the FRIENDS block above
+  // state). IS persisted (see serializeState/loadGame) — unlike the old
+  // mock version this replaced, these are real external references someone
+  // deliberately added, not disposable flavor. Jean Clode lives in this
+  // same array (so the roster renders him alongside real friends) but is
+  // NOT persisted himself — loadGame() re-inserts him after loading
+  // whatever real friends were saved.
   friends:[
-    {id:JEAN_CLODE_ID, name:'Jean Clode', level:99, bot:true, stations:[]},
-    {id:'f1', name:'Old Tomas', level:8, stations:[
-      {status:'ready', hits:1, hammersUsed:[], smithHitBy:['player']}, {status:'crafting', remainS:35}, {status:'idle'}]},
-    {id:'f2', name:'Lyra Ashwood', level:14, stations:[
-      {status:'ready', hits:0, hammersUsed:[], smithHitBy:[]}, {status:'ready', hits:3, hammersUsed:['fire','magic'], smithHitBy:['player']}, {status:'idle'}]},
-    {id:'f3', name:'Captain Voss', level:5, stations:[
-      {status:'idle'}, {status:'crafting', remainS:12}, {status:'idle'}]},
+    {id:JEAN_CLODE_ID, name:'Jean Clode', level:99, bot:true},
   ],
-  friendRequests:[{id:'r1', name:'Sera Nightglass'}],
   visitingFriendId:null,
+  // Transient result of the in-flight/last visitFriend() fetch — never
+  // persisted, always refetched live rather than cached, since a friend's
+  // real station state is only ever as fresh as their last sync (see
+  // syncStationSnapshot()). null = not visiting; {loading:true} mid-fetch;
+  // {notSynced:true} if they've never uploaded a snapshot; {error:true} on
+  // a failed fetch; otherwise the real {businessLevel, stations, ...}.
+  visitingFriendData:null,
   mineOpen:false,
   selectedMineId:null,
   catalogOpen:false,
@@ -1174,6 +1289,9 @@ function serializeState(){
     expeditionRequests: state.expeditionRequests,
     activeExpeditions: state.activeExpeditions,
     expeditionResultQueue: state.expeditionResultQueue,
+    // Jean Clode excluded — he's not a real friend entry, see loadGame()'s
+    // friends branch, which re-inserts him after restoring this list.
+    friends: state.friends.filter(f=>f.id!==JEAN_CLODE_ID),
   };
 }
 
@@ -1276,6 +1394,9 @@ function loadGame(){
     state.expeditionRequests = data.expeditionRequests || [];
     state.activeExpeditions = data.activeExpeditions || [];
     state.expeditionResultQueue = data.expeditionResultQueue || [];
+    // Jean Clode is never in a save (see serializeState()'s filter) — always
+    // re-add him after restoring whatever real friends were saved.
+    state.friends = [{id:JEAN_CLODE_ID, name:'Jean Clode', level:99, bot:true}, ...(data.friends||[])];
     return true;
   }catch(e){
     return false;
@@ -2060,7 +2181,13 @@ function hammerHit(stationIdx, craftId, hammerId, sourceId){
     c.smithHitBy.push(sourceId);
   } else {
     if(c.hammersUsed.includes(hammerId)) { render(); return; }
-    state.hammerInventory[hammerId] -= 1;
+    // Only the actual player's own click spends the actual player's own
+    // inventory. A remote friend's hit (see checkFriendPendingHits()) has
+    // ALREADY spent the FRIEND's own inventory client-side when they sent
+    // it — this player shouldn't lose a hammer they never swung. Jean
+    // Clode never reaches this branch at all (always uses 'smith', which
+    // has no inventory cost — see jeanClaudeHammerOnce()).
+    if(sourceId==='player') state.hammerInventory[hammerId] -= 1;
     c.hammersUsed.push(hammerId);
   }
   c.hits++;
@@ -2147,12 +2274,6 @@ function tickMines(){
 setInterval(()=>{
   const anyJustBecameReady = checkCraftCompletions();
   if(anyJustBecameReady) playCraftCompleteSfx();
-  state.friends.forEach(f=>f.stations.forEach(s=>{
-    if(s.status==='crafting'){
-      s.remainS--;
-      if(s.remainS<=0){ s.status='ready'; s.hits=0; s.hammersUsed=[]; s.smithHitBy=[]; }
-    }
-  }));
   tickMines();
   const jeanClaudeVisited = tickJeanClaude();
   const expeditionResolved = checkExpeditions();
@@ -2162,7 +2283,6 @@ setInterval(()=>{
   // now. A blanket render() every tick used to tear down and rebuild the whole DOM
   // once a second, which reset focus/selection in any focused input (impossible to
   // type in the friend box) and made clicks feel unreliable everywhere else.
-  const visitingFriend = state.friends.find(f=>f.id===state.visitingFriendId);
   const stillCookingOnWorkshop = state.tab==='workshop' && state.stations.some(st=>st.craftings.some(c=>!c.ready));
   const needsFullRender =
     !state.wheelSpinning && ( // a full render() would tear down #wheelDial mid-spin and kill the CSS transition — see openWheel()
@@ -2170,8 +2290,11 @@ setInterval(()=>{
       state.mineOpen ||
       state.expeditionsOpen ||
       expeditionResolved || // always show the result popup as soon as it's ready, regardless of tab
-      jeanClaudeVisited || // always show the toast/updated hit counts, regardless of tab
-      (state.tab==='friends' && visitingFriend && visitingFriend.stations.some(s=>s.status==='crafting'))
+      jeanClaudeVisited // always show the toast/updated hit counts, regardless of tab
+      // Note: a visited friend's station countdown is a static snapshot as
+      // of their last sync (see visitingFriendData's doc comment), not
+      // ticked live here like the player's own crafts — so there's
+      // nothing time-based to force a re-render for on that tab.
     );
   if(needsFullRender){
     render();
@@ -2242,69 +2365,114 @@ function tickJeanClaude(){
   return totalHits>0;
 }
 
-/* ---------- FRIENDS (front-end mockup only, no backend yet) ---------- */
+/* ---------- FRIENDS (real, backend-integrated — see the FRIENDS block
+   near the top of STATE for the identity/sync machinery this calls into) ---------- */
 
-function addFriendFromInput(){
-  const input = document.getElementById('friendNameInput');
-  const name = (input.value||'').trim();
-  if(!name) return;
-  state.friends.push({
-    id:'f'+Date.now(), name, level: 1+Math.floor(Math.random()*20),
-    stations:[{status:'idle'},{status:'idle'},{status:'idle'}],
-  });
-  input.value='';
-  setToast('Friend request sent to '+name+'. (mock &mdash; no backend yet)');
-  render();
-}
-function acceptRequest(id){
-  const req = state.friendRequests.find(r=>r.id===id);
-  if(!req) return;
-  state.friendRequests = state.friendRequests.filter(r=>r.id!==id);
-  state.friends.push({
-    id:req.id, name:req.name, level:1+Math.floor(Math.random()*20),
-    stations:[{status:'idle'},{status:'idle'},{status:'idle'}],
-  });
-  setToast(req.name+' is now your friend!');
-  render();
-}
-function declineRequest(id){
-  state.friendRequests = state.friendRequests.filter(r=>r.id!==id);
-  render();
-}
-function visitFriend(id){
-  if(id===JEAN_CLODE_ID) return; // no mock stations to visit — nothing in the UI links here anyway, just defensive
-  state.visitingFriendId = id;
-  render();
-}
-function leaveVisit(){ state.visitingFriendId = null; render(); }
-// sourceId mirrors hammerHit()'s same param, for the same reason: smith is free/
-// unlimited but capped at one hit per distinct "player" rather than one hit total
-// like the other hammers, even on a friend's (mock, for now) station — so this
-// stays correct the moment a real second visitor becomes possible, instead of
-// needing another pass through this function later.
-function hammerHitFriendStation(friendId, stationIdx, hammerId, sourceId){
-  sourceId = sourceId || 'player';
-  const friend = state.friends.find(f=>f.id===friendId);
-  if(!friend) return;
-  const s = friend.stations[stationIdx];
-  if(!s || s.status!=='ready') return;
-  if(!hammerCanUse(hammerId)) return;
-  if(!s.smithHitBy) s.smithHitBy = [];
-  if(hammerId==='smith'){
-    if(s.smithHitBy.includes(sourceId)) return;
-    s.smithHitBy.push(sourceId);
-  } else {
-    if(s.hammersUsed.includes(hammerId)) return;
-    state.hammerInventory[hammerId] -= 1;
-    s.hammersUsed.push(hammerId);
+async function addFriendByCode(){
+  const input = document.getElementById('friendCodeInput');
+  const code = (input.value||'').trim().toUpperCase();
+  if(!code) return;
+  if(state.friendCode && code===state.friendCode){ setToast("That's your own friend code."); return; }
+  if(state.friends.some(f=>f.friendCode===code)){ setToast('Already on your friends list.'); render(); return; }
+  input.disabled = true;
+  try{
+    const resp = await fetch(FRIENDS_API_BASE+'/api/players/by-code/'+encodeURIComponent(code));
+    if(!resp.ok){
+      setToast(resp.status===404 ? 'No player found with that code.' : "Couldn't reach the friends server — try again in a moment.");
+      return;
+    }
+    const data = await resp.json();
+    state.friends.push({id:data.playerId, friendCode:data.friendCode});
+    input.value='';
+    saveGame();
+    setToast('Added '+data.friendCode+' as a friend!');
+    render();
+  }catch(e){
+    setToast("Couldn't reach the friends server — try again in a moment.");
+  }finally{
+    input.disabled = false;
   }
-  s.hits++;
-  playHammerHitSfx();
+}
+function removeFriend(id){
+  state.friends = state.friends.filter(f=>f.id!==id);
+  saveGame();
+  render();
+}
+async function visitFriend(id){
+  if(id===JEAN_CLODE_ID) return; // no station data to visit — nothing in the UI links here anyway, just defensive
+  state.visitingFriendId = id;
+  state.visitingFriendData = {loading:true};
+  render();
+  try{
+    const resp = await fetch(FRIENDS_API_BASE+'/api/stations/'+encodeURIComponent(id));
+    if(resp.status===404){ state.visitingFriendData = {notSynced:true}; }
+    else if(!resp.ok){ state.visitingFriendData = {error:true}; }
+    else {
+      const raw = await resp.json();
+      // raw.snapshotJson is a STRING (the DB column) — the actual
+      // stations/craftings array renderFriendVisit()/hammerFriendCraft()
+      // read is nested inside it, not a top-level field of the response.
+      let parsed;
+      try{ parsed = JSON.parse(raw.snapshotJson); }catch(e){ parsed = {}; }
+      state.visitingFriendData = {businessLevel: raw.businessLevel, stations: parsed.stations||[]};
+    }
+  }catch(e){
+    state.visitingFriendData = {error:true};
+  }
+  // The player may have already hit "Back to friends" (or started visiting
+  // someone else) before this resolved — don't let a stale fetch stomp a
+  // newer/cleared view.
+  if(state.visitingFriendId===id) render();
+}
+function leaveVisit(){ state.visitingFriendId = null; state.visitingFriendData = null; render(); }
+
+// sourceId mirrors hammerHit()'s same param, for the same reason: smith is
+// free/unlimited but capped at one hit per distinct "player" (here, this
+// visitor's own real playerId) rather than one hit total like the other
+// hammers.
+//
+// The reward/inventory cost below land immediately for the VISITOR and
+// don't depend on the friend ever actually seeing this — the actual effect
+// on THEIR craft only ever applies on their own client, via their own
+// hammerHit() call, the next time they drain their pending-hits queue (see
+// checkFriendPendingHits()). This function only queues that; it never
+// touches the friend's real craft data directly, since the visitor's copy
+// of it (visitingFriendData) is just a snapshot that could already be
+// stale by the time this runs.
+async function hammerFriendCraft(targetPlayerId, stationIdx, craftId, hammerId){
+  if(!hammerCanUse(hammerId)) return;
+  const data = state.visitingFriendData;
+  if(!data || !data.stations) return;
+  const st = data.stations.find(s=>s.stationIdx===stationIdx);
+  const c = st && st.craftings.find(x=>x.craftId===craftId);
+  if(!c || !c.ready) return;
+  if(hammerId==='smith'){
+    if((c.smithHitBy||[]).includes(state.friendPlayerId)) return;
+  } else if(c.hammersUsed.includes(hammerId)){
+    return;
+  }
+
+  if(hammerId!=='smith') state.hammerInventory[hammerId] -= 1;
   state.gold += 5;
   gainRep(1);
+  playHammerHitSfx();
   const hm = HAMMERS.find(h=>h.id===hammerId);
-  setToast('You hit '+friend.name+"'s station with your "+hm.name+'! (+5 gold, +1 reputation, thanks)');
+  setToast('You hit their station with your '+hm.name+'! (+5 gold, +1 reputation, thanks)');
+
+  // Optimistic local update so the button list reflects it immediately,
+  // without waiting on a re-fetch.
+  if(hammerId==='smith'){ (c.smithHitBy = c.smithHitBy||[]).push(state.friendPlayerId); }
+  else { c.hammersUsed.push(hammerId); }
+  saveGame();
   render();
+
+  try{
+    await fetch(FRIENDS_API_BASE+'/api/stations/'+encodeURIComponent(targetPlayerId)+'/hits', {
+      method:'POST',
+      headers: Object.assign({'Content-Type':'application/json'}, friendAuthHeaders()),
+      body: JSON.stringify({payloadJson: JSON.stringify({type:'hammerCraft', stationIdx, craftId, hammerId})}),
+    });
+  }catch(e){ /* best-effort — see this function's doc comment */ }
 }
 
 /* ---------- WHEEL ---------- */
@@ -3247,37 +3415,53 @@ function renderCatalogOverview(){
 function initials(name){ return name.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase(); }
 
 function renderFriendVisit(friend){
-  const stationRows = friend.stations.map((s,i)=>{
-    if(s.status==='idle'){
-      return `<div class="visitStation"><div>Station ${i+1}</div><div class="small">No craft in progress.</div></div>`;
-    }
-    if(s.status==='crafting'){
-      return `<div class="visitStation"><div>Station ${i+1}</div><div class="small">Forging &mdash; ${s.remainS}s remaining</div></div>`;
-    }
-    // Smith is excluded once *you* ('player') have hit this station, not once it's
-    // been hit at all — same "once per player" rule as your own stations, so a
-    // future second real visitor here wouldn't find themselves already locked out.
-    const options = POST_COOK_HAMMERS.filter(h=>{
-      if(h.id==='smith') return !(s.smithHitBy||[]).includes('player');
-      return !s.hammersUsed.includes(h.id);
-    }).filter(h=>hammerCanUse(h.id));
-    const hitButtons = options.length
-      ? options.map(h=>`<button onclick="hammerHitFriendStation('${friend.id}',${i},'${h.id}')">${h.name}${h.id==='smith'?'':' ('+state.hammerInventory[h.id]+')'}</button>`).join('')
-      : `<button disabled>No more hammers available</button>`;
-    return `<div class="visitStation ready">
-      <div>
-        <div>Station ${i+1} &middot; ready to collect</div>
-        <div class="small">Hammer hits: ${s.hits}/${MAX_HAMMER_HITS} &middot; each hammer type only strikes once (smith: once per visitor)</div>
-      </div>
-      <div class="row" style="gap:6px;">${hitButtons}</div>
-    </div>`;
-  }).join('');
-  return `<div class="panel">
-    <div class="row" style="justify-content:space-between;">
-      <div class="section-title" style="border:none;margin:0;">Visiting ${friend.name}'s workshop</div>
+  const header = `<div class="row" style="justify-content:space-between;">
+      <div class="section-title" style="border:none;margin:0;">Visiting ${friend.friendCode}'s workshop</div>
       <button onclick="leaveVisit()">Back to friends</button>
-    </div>
-    <div class="small" style="margin-bottom:10px;">Business level ${friend.level}. Give a ready station a hammer hit using one of your own hammers to help &mdash; you'll get a small thank-you reward.</div>
+    </div>`;
+  const data = state.visitingFriendData;
+  if(!data || data.loading){
+    return `<div class="panel">${header}<div class="small" style="margin-top:10px;">Loading their workshop&hellip;</div></div>`;
+  }
+  if(data.error){
+    return `<div class="panel">${header}<div class="small" style="margin-top:10px;">Couldn't reach the friends server &mdash; try again in a moment.</div></div>`;
+  }
+  if(data.notSynced){
+    return `<div class="panel">${header}<div class="small" style="margin-top:10px;">${friend.friendCode} hasn't opened ForgeQuest since you added them &mdash; nothing to show yet.</div></div>`;
+  }
+  const stations = data.stations||[];
+  const stationRows = stations.length ? stations.map(st=>{
+    if(!st.craftings.length){
+      return `<div class="visitStation"><div>Station ${st.stationIdx+1}</div><div class="small">Nothing cooking.</div></div>`;
+    }
+    return st.craftings.map(c=>{
+      if(!c.ready){
+        const remainS = Math.ceil(c.remainMs/1000);
+        return `<div class="visitStation"><div>Station ${st.stationIdx+1}</div><div class="small">Forging &mdash; ${remainS}s remaining (as of their last sync)</div></div>`;
+      }
+      // Smith is excluded once *you* (this visitor's own real playerId)
+      // have hit this craft, not once it's been hit at all — same "once
+      // per source" rule hammerHit() uses for the player's own crafts, so
+      // a second friend visiting wouldn't find themselves already locked
+      // out just because you went first.
+      const options = POST_COOK_HAMMERS.filter(h=>{
+        if(h.id==='smith') return !(c.smithHitBy||[]).includes(state.friendPlayerId);
+        return !c.hammersUsed.includes(h.id);
+      }).filter(h=>hammerCanUse(h.id));
+      const hitButtons = options.length
+        ? options.map(h=>`<button onclick="hammerFriendCraft('${friend.id}',${st.stationIdx},'${c.craftId}','${h.id}')">${h.name}${h.id==='smith'?'':' ('+state.hammerInventory[h.id]+')'}</button>`).join('')
+        : `<button disabled>No more hammers available</button>`;
+      return `<div class="visitStation ready">
+        <div>
+          <div>Station ${st.stationIdx+1} &middot; ready to collect</div>
+          <div class="small">Each hammer type only strikes once (smith: once per visitor)</div>
+        </div>
+        <div class="row" style="gap:6px;">${hitButtons}</div>
+      </div>`;
+    }).join('');
+  }).join('') : `<div class="small">Nothing on their workbench yet.</div>`;
+  return `<div class="panel">${header}
+    <div class="small" style="margin-bottom:10px;">Business level ${data.businessLevel}. Give a ready station a hammer hit using one of your own hammers to help &mdash; you'll get a small thank-you reward.</div>
     ${stationRows}
   </div>`;
 }
@@ -3287,10 +3471,11 @@ function renderFriends(){
     const friend = state.friends.find(f=>f.id===state.visitingFriendId);
     if(friend) return renderFriendVisit(friend);
     state.visitingFriendId = null;
+    state.visitingFriendData = null;
   }
   // Jean Clode always sorts first, regardless of where he sits in the
   // underlying array — pinned to the top of the list per how he's meant to
-  // read (a permanent fixture, not just another mock entry).
+  // read (a permanent fixture, not just another added friend).
   const sortedFriends = [...state.friends].sort((a,b)=>(b.id===JEAN_CLODE_ID?1:0)-(a.id===JEAN_CLODE_ID?1:0));
   const friendRows = sortedFriends.map(f=>{
     if(f.bot){
@@ -3308,18 +3493,21 @@ function renderFriends(){
         </div>
       </div>`;
     }
-    const mini = f.stations.map(s=>`<div class="miniStation ${s.status}"></div>`).join('');
-    const readyCount = f.stations.filter(s=>s.status==='ready').length;
+    // No display-name system exists yet (see PlayerEndpoints' by-code
+    // lookup, which likewise only ever returns a code) — the friend code
+    // doubles as the shown label until that's worth adding.
     return `<div class="friendCard">
       <div class="friendInfo">
-        <div class="avatar">${initials(f.name)}</div>
+        <div class="avatar">${initials(f.friendCode)}</div>
         <div>
-          <b>${f.name}</b> <span class="small">&middot; level ${f.level}</span>
-          <div class="miniStations" style="margin-top:4px;">${mini}</div>
-          <div class="small">${readyCount? readyCount+' station'+(readyCount>1?'s':'')+' ready for a hammer hit' : 'Nothing ready right now'}</div>
+          <b>${f.friendCode}</b>
+          <div class="small" style="margin-top:4px;">Visit to see what's on their workbench.</div>
         </div>
       </div>
-      <button class="primary" onclick="visitFriend('${f.id}')">Visit</button>
+      <div class="row" style="gap:6px;">
+        <button class="primary" onclick="visitFriend('${f.id}')">Visit</button>
+        <button onclick="removeFriend('${f.id}')">Remove</button>
+      </div>
     </div>`;
   }).join('');
   return `<div class="panel">
@@ -3753,26 +3941,14 @@ function renderShopSidebar(){
 }
 
 function renderFriendSidebar(){
-  const requestRows = state.friendRequests.map(r=>`
-    <div class="friendCard">
-      <div class="friendInfo"><div class="avatar">${initials(r.name)}</div><div><b>${r.name}</b><div class="small">Wants to be your friend</div></div></div>
-      <div class="row">
-        <button class="primary" onclick="acceptRequest('${r.id}')">Accept</button>
-        <button onclick="declineRequest('${r.id}')">Decline</button>
-      </div>
-    </div>`).join('');
   return `<div class="panel">
     <div class="section-title">Add a friend</div>
-    <div class="small" style="margin-bottom:8px;">This is a front-end mockup &mdash; no real accounts or requests are sent yet.</div>
+    <div class="small" style="margin-bottom:8px;">Enter a friend's code to add them &mdash; find your own in Settings.</div>
     <div class="row">
-      <input id="friendNameInput" type="text" placeholder="Friend's name" style="flex:1;min-width:120px;background:rgba(32,30,29,.04);color:var(--text);border:1.5px solid var(--border);border-radius:999px;padding:8px 14px;font-size:12px;">
-      <button class="primary" onclick="addFriendFromInput()">Send</button>
+      <input id="friendCodeInput" type="text" placeholder="FQ-XXXXXX" style="flex:1;min-width:120px;background:rgba(32,30,29,.04);color:var(--text);border:1.5px solid var(--border);border-radius:999px;padding:8px 14px;font-size:12px;text-transform:uppercase;">
+      <button class="primary" onclick="addFriendByCode()">Add</button>
     </div>
-  </div>
-  ${state.friendRequests.length? `<div class="panel" style="margin-top:14px;">
-    <div class="section-title">Friend requests (${state.friendRequests.length})</div>
-    ${requestRows}
-  </div>` : ''}`;
+  </div>`;
 }
 
 function renderSidebar(){
@@ -3864,12 +4040,11 @@ window.debugAddGems = debugAddGems;
 window.scrapSword = scrapSword;
 window.fulfillOrder = fulfillOrder;
 window.skipOrder = skipOrder;
-window.addFriendFromInput = addFriendFromInput;
-window.acceptRequest = acceptRequest;
-window.declineRequest = declineRequest;
+window.addFriendByCode = addFriendByCode;
+window.removeFriend = removeFriend;
 window.visitFriend = visitFriend;
 window.leaveVisit = leaveVisit;
-window.hammerHitFriendStation = hammerHitFriendStation;
+window.hammerFriendCraft = hammerFriendCraft;
 window.toggleMineOverview = toggleMineOverview;
 window.closeMineOverview = closeMineOverview;
 window.selectMine = selectMine;
