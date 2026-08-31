@@ -949,12 +949,14 @@ const JEAN_CLODE_ID = 'jean-clode';
    share a code) so it works before the game is ever on Steam, and keeps
    working the same way once it is. -------------------------------------- */
 
-// TODO: point this at the real deployed backend once
-// ForgeQuest-Backend is actually running somewhere reachable (see that
-// repo's README "Deploying" section) — every call below fails closed and
-// quietly against a placeholder host like this one, so shipping with this
-// unset doesn't break anything, it just leaves Settings showing "Offline".
-const FRIENDS_API_BASE = 'https://friends.forgequest.example.com';
+// Real deployed backend (Pterodactyl/Bloom.host, see ForgeQuest-Backend's
+// README "Deploying" section) — plain http:// on purpose for now, not a
+// typo: there's no reverse proxy/TLS in front of it yet (deliberately
+// deferred, see SESSION_NOTES.md), so X-Player-Secret currently travels
+// unencrypted. Fine for now-scale testing, NOT fine once this is in front
+// of strangers — revisit before then (swap to https:// once Caddy or
+// equivalent is in front of port 12832).
+const FRIENDS_API_BASE = 'http://friends.ocgames.xyz:12832';
 const FRIEND_IDENTITY_KEY = 'forgequest_friend_identity_v1';
 
 function loadFriendIdentity(){
