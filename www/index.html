@@ -769,7 +769,7 @@ const state = {
   level:1, exp:0, gold:600, gems:0,
   tab:'workshop',
   toast:null,
-  ores:{copper:3, bronze:0, iron:0, steel:0, silver:0, gold:0},
+  ores:{copper:3, bronze:0, iron:0, steel:0, silver:0, gold:0, platinum:0},
   catalog:{}, fusionCatalog:new Set(),
   inventory:[],
   stations: [ makeTable(true), makeTable(false) ],
@@ -931,7 +931,18 @@ function loadGame(){
     state.gold = data.gold ?? state.gold;
     state.gems = data.gems ?? state.gems;
     if(data.tab) state.tab = data.tab;
-    if(data.ores) state.ores = data.ores;
+    // Merge onto a fresh zero-defaulted template rather than replacing outright —
+    // an older save made before a new material existed (e.g. Platinum, added
+    // after copper/bronze/.../gold) would have no key for it at all, and every
+    // ore-crediting site here does `state.ores[id] += n` in at least one place
+    // (buyOre), which computes `undefined + n` = NaN the first time that ore
+    // is ever bought — silently unplaceable forever after (selectPlaceOre's
+    // `>0` check treats NaN as falsy) despite the gold already being spent.
+    if(data.ores){
+      const oreDefaults = {};
+      MATERIALS.forEach(m=>{ oreDefaults[m.id] = 0; });
+      state.ores = Object.assign(oreDefaults, data.ores);
+    }
     if(data.catalog){
       Object.keys(state.catalog).forEach(id=>{ state.catalog[id] = new Set(data.catalog[id]||[]); });
     }
@@ -1075,7 +1086,10 @@ function buyOre(matId, qty){
   const cost = mat.cost*qty;
   if(state.gold<cost) return;
   state.gold -= cost;
-  state.ores[matId] += qty;
+  // Defensive += (matches every other ore-crediting site in this file) rather
+  // than a bare `+=` — protects against exactly the missing-key/NaN class of
+  // bug loadGame() now also guards against, regardless of the specific cause.
+  state.ores[matId] = (state.ores[matId]||0) + qty;
   setToast('Bought '+qty+' '+mat.name+' ore.');
   render();
 }
