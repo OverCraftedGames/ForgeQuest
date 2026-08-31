@@ -3,7 +3,7 @@
 **Run a blacksmith shop. Mine your own ore, work the forge, fill orders for
 your customers, and fuse swords together to discover new, rarer recipes.**
 
-ForgeQuest is a cozy crafting/idle game from [OverCrafted Games](https://ocgames.xyz).
+ForgeQuest is a cozy crafting/idle game from [OverCrafted Games](https://discord.gg/ahVpJH4WA6).
 Send friends out to visit your shop while you're away, chase down every
 achievement, and slowly climb from a one-table workshop to a proper forge.
 
