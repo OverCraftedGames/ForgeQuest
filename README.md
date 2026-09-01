@@ -13,13 +13,18 @@ on the way to a Steam release.
 
 🔨 **Early development, but the core loop is full-featured.** Expect
 frequent changes and the occasional rough edge — Steam integration hasn't
-landed yet. Latest release: [v0.1.3](../../releases/tag/v0.1.3).
+landed yet. Latest release: [v0.1.5](../../releases/tag/v0.1.5).
 
 ## What's in the game right now
 
 - **Crafting** — buy ore, place it on a grid-based crafting table, and forge
   swords. Discover **fusion** recipes by combining materials in the right
-  arrangement for rarer, higher-value results.
+  arrangement for rarer, higher-value results. Crafting with a material
+  also grows your **expertise** in it, a separate track from your business
+  level that makes hammering that material's crafts more likely to crit.
+- **Catalog** — every sword you've discovered gets a line of flavor text
+  alongside its stats, both the first time you collect it and any time you
+  revisit the Catalog after.
 - **Hammers** — hire hammers with distinct special effects (cutting craft
   time, boosting crit chance, and more) to work a table alongside you.
 - **Mines** — unlock passive mines that produce ore on their own over time.
