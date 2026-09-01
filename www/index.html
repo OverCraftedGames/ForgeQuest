@@ -2356,6 +2356,20 @@ const EXPEDITION_TIERS = {
 const EXPEDITION_RETURN_CHANCE = 0.28;
 // Failure still pays out, just a fraction of what success would have.
 const EXPEDITION_FAILURE_PAYOUT_FRACTION = 0.22;
+// Real design gap this addresses: business level only advances via gainRep(),
+// and until now the ONLY meaningful source of it was Orders (orderRep() below,
+// reward/60) — resolveExpedition() paid gold/gems but never rep at all. Since
+// Expeditions are explicitly meant to out-earn Orders (rewardMult up to 6.5x),
+// a player who leans on them ends up with a large, growing gold pile and a
+// stalled business level, since expToNext(level) keeps climbing with nothing
+// feeding it. Fixing that by giving Expeditions rep too, but DELIBERATELY at
+// a worse gold-to-rep rate than Orders (this divisor vs. orderRep's 60) so
+// Expeditions stay the better *gold* engine and Orders stay the better *rep*
+// engine, rather than Expeditions quietly becoming strictly better at both.
+// Success only (matches gemsOnSuccess's own "onSuccess" framing) — a failed
+// run still pays partial gold via EXPEDITION_FAILURE_PAYOUT_FRACTION above,
+// but contributes nothing to leveling, keeping the risk/reward real.
+const EXPEDITION_REP_DIVISOR = 150;
 
 function eligibleExpeditionTiers(){
   return Object.entries(EXPEDITION_TIERS).filter(([id,t])=>state.level>=t.reqLevel);
@@ -2527,19 +2541,26 @@ function resolveExpedition(exp){
   const tier = EXPEDITION_TIERS[exp.tier];
   const success = Math.random() < expeditionSuccessChance(exp.partyPower, exp.floorPower);
   const variance = 0.94 + Math.random()*0.12; // same ±6% convention as orderReward()/fusionSellPrice()
-  let goldReward, gemsReward = 0, returnedSword = null;
+  let goldReward, gemsReward = 0, repReward = 0, returnedSword = null;
   if(success){
     goldReward = Math.round(exp.referenceValue * tier.rewardMult * variance);
     gemsReward = tier.gemsOnSuccess;
+    // See EXPEDITION_REP_DIVISOR's doc comment — success-only, deliberately
+    // worse gold-to-rep rate than orderRep() so Expeditions gain a real
+    // leveling contribution without out-competing Orders at their own job.
+    // Floor of 1 mirrors orderRep()'s minRep floor: a real success should
+    // never round down to a rep gain of zero.
+    repReward = Math.max(1, Math.round(goldReward/EXPEDITION_REP_DIVISOR));
     if(Math.random() < EXPEDITION_RETURN_CHANCE) returnedSword = exp.swords[Math.floor(Math.random()*exp.swords.length)];
   } else {
     goldReward = Math.round(exp.referenceValue * tier.rewardMult * EXPEDITION_FAILURE_PAYOUT_FRACTION * variance);
   }
   state.gold += goldReward;
   state.gems += gemsReward;
+  if(repReward>0) gainRep(repReward); // no-op-safe on failure, repReward stays 0
   if(returnedSword) state.inventory.push({...returnedSword, id:'sw'+(swordSeq++)}); // fresh id — the snapshot's own id was already removed from inventory at commit time
   state.expeditionResultQueue.push({
-    id: exp.id, party: exp.party, tier: exp.tier, success, goldReward, gemsReward,
+    id: exp.id, party: exp.party, tier: exp.tier, success, goldReward, gemsReward, repReward,
     returnedSwordName: returnedSword ? returnedSword.name : null,
   });
 }
@@ -4230,6 +4251,7 @@ function renderExpeditionResultPopup(){
       <div style="font:400 30px/1.2 var(--font-heading);color:var(--gold);text-align:center;margin:10px 0;">
         +${result.goldReward.toLocaleString()} gold${result.gemsReward? ' &middot; +'+result.gemsReward+' gems' : ''}
       </div>
+      ${(result.repReward||0)>0? `<div class="small" style="text-align:center;color:var(--accent);margin-bottom:6px;">+${result.repReward} reputation</div>` : ''}
       <div class="small" style="text-align:center;margin-bottom:14px;">
         ${result.returnedSwordName ? 'One sword made it back: '+result.returnedSwordName+'.' : 'None of the three swords came back.'}
       </div>
