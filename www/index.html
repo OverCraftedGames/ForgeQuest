@@ -1206,27 +1206,36 @@ async function checkFriendPendingHits(){
   const hitBy = new Set();
   const newlyAccepted = [];
   hits.forEach(hit=>{
-    let payload;
-    try{ payload = JSON.parse(hit.payloadJson); }catch(e){ return; }
+    // Each hit gets its OWN try/catch — this batch is already destructively
+    // drained server-side by the fetch above, so one bad/throwing entry
+    // (a hammerCraft referencing something unexpected, say) must never be
+    // able to abort the whole forEach and silently swallow every hit
+    // queued after it in the same batch, friendAccepted notifications
+    // included. There's no way to get a lost entry back once it's off the
+    // server, so isolating failures here matters more than in most of
+    // this file's other loops.
+    try{
+      const payload = JSON.parse(hit.payloadJson);
 
-    if(payload.type==='friendAccepted'){
-      if(!state.friends.some(f=>f.id===payload.playerId)) newlyAccepted.push(payload);
-      return;
-    }
-    if(payload.type!=='hammerCraft') return;
+      if(payload.type==='friendAccepted'){
+        if(!state.friends.some(f=>f.id===payload.playerId)) newlyAccepted.push(payload);
+        return;
+      }
+      if(payload.type!=='hammerCraft') return;
 
-    const st = state.stations[payload.stationIdx];
-    const c = st && st.craftings.find(x=>x.id===payload.craftId);
-    if(!c || !c.ready) return; // already collected/changed since it was queued — skip
-    const hitsBefore = c.hits;
-    hammerHit(payload.stationIdx, payload.craftId, payload.hammerId, hit.fromPlayerId);
-    if(c.hits>hitsBefore){
-      applied++;
-      // hit.fromDisplayName is whatever the sender's name was AT SEND TIME
-      // (server-looked-up, see the backend's PendingHitEndpoints) — good
-      // enough for a one-off popup, no need to cross-reference state.friends.
-      hitBy.add(hit.fromDisplayName || 'A friend');
-    }
+      const st = state.stations[payload.stationIdx];
+      const c = st && st.craftings.find(x=>x.id===payload.craftId);
+      if(!c || !c.ready) return; // already collected/changed since it was queued — skip
+      const hitsBefore = c.hits;
+      hammerHit(payload.stationIdx, payload.craftId, payload.hammerId, hit.fromPlayerId);
+      if(c.hits>hitsBefore){
+        applied++;
+        // hit.fromDisplayName is whatever the sender's name was AT SEND TIME
+        // (server-looked-up, see the backend's PendingHitEndpoints) — good
+        // enough for a one-off popup, no need to cross-reference state.friends.
+        hitBy.add(hit.fromDisplayName || 'A friend');
+      }
+    }catch(e){ /* isolated on purpose, see comment above — one bad hit shouldn't cost the rest of the batch */ }
   });
 
   newlyAccepted.forEach(payload=>{
