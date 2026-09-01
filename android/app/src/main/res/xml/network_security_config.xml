@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The Friends feature (see www/index.html's FRIENDS_API_BASE) talks to
+  friends.ocgames.xyz over plain HTTP -- there's no reverse proxy/TLS in
+  front of it yet (see SESSION_NOTES.md, "revisit before this is in front
+  of strangers"). Android blocks cleartext HTTP by default since API 28
+  (this app targets 34), which would otherwise make every Friends call
+  fail silently as a network error with no indication why. Scoped to just
+  this one domain rather than uses­CleartextTraffic="true" app-wide, so
+  nothing else (including whatever scheme Capacitor serves the bundled
+  web app over) is affected. Swap this back out once the backend is
+  actually served over https://.
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">friends.ocgames.xyz</domain>
+    </domain-config>
+</network-security-config>
