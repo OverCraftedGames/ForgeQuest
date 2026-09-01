@@ -1018,6 +1018,25 @@ const GRID_UPGRADE_REQ_LEVEL = [2, 4, 7, 11];
 /* Premium (gem) prices to buy a single hammer token directly, skipping the wheel. */
 const HAMMER_GEM_COST = {fire:25, magic:45, obsidian:30, gold:35, glass:20};
 
+/* Real-money gem packs — framework only, ahead of Steam integration (see
+   README Roadmap: "Steamworks integration" hasn't landed, and Steam's
+   microtransaction API is the only payment rail this game is planned to
+   use, no separate processor). purchaseGemPack() below can't actually
+   charge anyone yet, so this exists to get the pricing/UI/data shape
+   built and screenshot-able now rather than blocking on Steam. `sku` is a
+   placeholder Steam item id to wire up later; everything else renders
+   straight from this array (see renderGemPacks()). Sizes/prices are a
+   rough first pass sized off the existing gem economy (a hammer runs
+   20-45 gems, a full 2nd table 150, grid upgrades 15-85 — so ~100 gems
+   should feel like "one hammer," not pocket change) rather than any real
+   market research — retune freely before this ever ships for real. */
+const GEM_PACKS = [
+  {id:'pouch',   gems:100,  bonus:0,   priceUSD:0.99,  sku:'gems_pouch_100'},
+  {id:'satchel', gems:300,  bonus:30,  priceUSD:2.99,  sku:'gems_satchel_330'},
+  {id:'chest',   gems:750,  bonus:100, priceUSD:6.99,  sku:'gems_chest_850'},
+  {id:'vault',   gems:2000, bonus:350, priceUSD:16.99, sku:'gems_vault_2350'},
+];
+
 const HAMMER_HIT_CRIT_CHANCE = 0.15;
 /* The plain smith hammer has no special effect otherwise, so it gets a
    crit-chance edge on top of the base rate above to keep it worth using —
@@ -3620,12 +3639,57 @@ function setShopSubTab(t){ state.shopSubTab = t; render(); }
 // Split into two sub-tabs (ore vs. gems) so each fits on screen without scrolling,
 // instead of one long panel stacking both shops.
 function renderShop(){
-  const sub = state.shopSubTab==='gems' ? 'gems' : 'ore';
+  const sub = state.shopSubTab==='gems' ? 'gems' : state.shopSubTab==='buygems' ? 'buygems' : 'ore';
   const switcher = `<div class="row" style="gap:8px;margin-bottom:14px;">
     <button class="${sub==='ore'?'primary':''}" onclick="setShopSubTab('ore')">Ore shop</button>
     <button class="${sub==='gems'?'primary':''}" onclick="setShopSubTab('gems')">Gem shop</button>
+    <button class="${sub==='buygems'?'primary':''}" onclick="setShopSubTab('buygems')">Buy gems</button>
   </div>`;
-  return switcher + (sub==='ore' ? renderOreShop() : renderGemShop());
+  const body = sub==='ore' ? renderOreShop() : sub==='gems' ? renderGemShop() : renderGemPacks();
+  return switcher + body;
+}
+
+// Framework-only for now — see GEM_PACKS' doc comment. Renders real pricing/
+// UI so the flow is screenshot-able and the Buy button is wired end-to-end,
+// but purchaseGemPack() (below renderGemPacks()) can't actually take anyone's
+// money without Steam's purchasing API, which isn't integrated yet.
+function renderGemPacks(){
+  const rows = GEM_PACKS.map(p=>{
+    const total = p.gems + p.bonus;
+    return `<div class="shopRow">
+      <div>
+        <b>${total.toLocaleString()} gems</b>${p.bonus? ` <span class="oreTag">(${p.gems.toLocaleString()} + ${p.bonus.toLocaleString()} bonus)</span>` : ''}
+        <div class="small">$${p.priceUSD.toFixed(2)}</div>
+      </div>
+      <button onclick="purchaseGemPack('${p.id}')">${DEBUG_BUILD? '[DEBUG] Grant' : 'Buy'}</button>
+    </div>`;
+  }).join('');
+  return `<div class="panel">
+    <div class="section-title">Buy gems</div>
+    <div class="small" style="margin-bottom:10px;">Real purchases aren't live yet &mdash; gem packs need Steam's purchasing API, which is coming with the Steam release (see the Roadmap). Sizes and prices below are a first-pass placeholder.</div>
+    ${rows}
+  </div>`;
+}
+
+// Stub on purpose: there's no payment processor wired in yet (see GEM_PACKS'
+// doc comment), so this can't charge real money. In a DEBUG_BUILD it grants
+// the gems directly so the rest of the flow (UI, gem-spend paths) can be
+// exercised without needing Steam; in a real build it's honest with the
+// player instead of pretending a purchase happened. Swap this out for a
+// real Steamworks microtransaction call (and a server-side receipt check)
+// when that integration lands — the UI/data side won't need to change.
+function purchaseGemPack(packId){
+  const pack = GEM_PACKS.find(p=>p.id===packId);
+  if(!pack) return;
+  if(DEBUG_BUILD){
+    const total = pack.gems + pack.bonus;
+    state.gems += total;
+    setToast('[DEBUG] Granted '+total+' gems (real purchases need Steam integration).');
+    render();
+    return;
+  }
+  setToast('Gem packs aren\'t purchasable yet &mdash; coming with the Steam release.');
+  render();
 }
 
 function renderOreShop(){
