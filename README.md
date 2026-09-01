@@ -13,7 +13,7 @@ on the way to a Steam release.
 
 🔨 **Early development, but the core loop is full-featured.** Expect
 frequent changes and the occasional rough edge — Steam integration hasn't
-landed yet. Latest release: [v0.1.0](../../releases/tag/v0.1.0).
+landed yet. Latest release: [v0.1.2](../../releases/tag/v0.1.2).
 
 ## What's in the game right now
 
@@ -32,6 +32,9 @@ landed yet. Latest release: [v0.1.0](../../releases/tag/v0.1.0).
 - **Friends** — add friends by code and visit their workshop in a real
   popout: watch their live crafting grid and hammer their ready crafts to
   help them out. Backed by a small dedicated server, not local-only.
+- **Cosmetic avatar & title** — your achievements double as unlockable
+  profile icons and titles, shown to friends on your friend card. Pick
+  yours from the "Your Profile" button in the Friends tab.
 
 ## Playing it
 
