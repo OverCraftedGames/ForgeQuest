@@ -911,7 +911,7 @@ function checkAchievements(){
     if(a.check(state)){
       state.unlockedAchievements.add(a.id);
       state.gems += ACHIEVEMENT_GEM_REWARD;
-      setToast('🏆 Achievement unlocked: '+a.name+'! (+'+ACHIEVEMENT_GEM_REWARD+' gems)');
+      setToast('🏆 Achievement unlocked: '+a.name+'! (+'+ACHIEVEMENT_GEM_REWARD+' forge marks)');
     }
   });
 }
@@ -1011,7 +1011,7 @@ function claimDailyLogin(){
   state.dailyRewardPopup = null;
   const parts = [
     reward.gold?('+'+reward.gold+' gold'):null,
-    reward.gems?('+'+reward.gems+' gems'):null,
+    reward.gems?('+'+reward.gems+' forge marks'):null,
     reward.ore?('+'+reward.ore+' '+matById(popup.oreId).name+' ore'):null,
   ].filter(Boolean).join(', ');
   setToast('Day '+popup.day+' login reward claimed: '+parts+'!');
@@ -2170,7 +2170,7 @@ const TUTORIAL_STEPS = [
   {title:'Place ore and fire', body:'In the <b>Workshop</b>, tap an ore type then tap an empty grid cell to place it. Once two ore sit next to each other, a <b>Fire</b> button appears — same ore makes a straight sword, two different ores fuse into something new.'},
   {title:'Hammer for quality', body:'Every craft starts at Rank D. Once it’s ready, hit it with a hammer before collecting to raise its quality — check the small hammer icon on the crafting grid to see what you’re carrying.'},
   {title:'Fulfill orders', body:'Adventurers in the <b>Orders</b> tab buy finished swords for gold and reputation. Reputation levels up your business, which unlocks more ore, tables, and hammers.'},
-  {title:'Gems and the Wheel', body:'Gems are a second currency — spend them on grid upgrades, an extra table, or hammers directly, or earn more from achievements and the free hourly <b>Spin the wheel</b> button at the top of the Workshop.'},
+  {title:'Forge Marks and the Wheel', body:'Forge Marks are a second currency — spend them on grid upgrades, an extra table, or hammers directly, or earn more from achievements and the free hourly <b>Spin the wheel</b> button at the top of the Workshop.'},
   {title:'Friends', body:'Add friends by code in the <b>Friends</b> tab to visit their workshop: watch their live crafting grid and hammer their ready crafts to help them out. Jean Clode, a permanent helper, will swing by on his own every so often to hammer things for you too — no invite needed. Your achievements double as a profile — pick an avatar and title from the <b>Your Profile</b> button so friends see who’s visiting.'},
   {title:'You’re set', body:'That’s the core loop — buy, forge, hammer, sell, repeat. Check <b>Mines</b> for passive ore income. Keep growing your business and you’ll unlock <b>Expeditions</b> too — send swords out with an adventuring party for a bigger payout than selling them outright. Have fun!'},
 ];
@@ -2384,7 +2384,7 @@ function fulfillOrder(orderId){
   // that actually pays out for one — not at craft/collect time, so it can't
   // be farmed by crafting fusion swords and never selling them.
   let gemNote = '';
-  if(sword.fusion){ state.gems += 1; gemNote = ' (+1 gem)'; }
+  if(sword.fusion){ state.gems += 1; gemNote = ' (+1 forge mark)'; }
   setToast(order.requester+' takes the '+sword.name+' and pays '+reward.toLocaleString()+' gold!'+gemNote);
   if(order.guaranteed){
     state.guaranteedOrder = null;
@@ -3513,7 +3513,7 @@ const WHEEL_SEGMENTS = [
   {id:'obsidian',    pct:5,  label:'Obsidian hammer',  color:'#3a3a3a', kind:'hammer', hammerId:'obsidian'},
   {id:'gold_hammer', pct:5,  label:'Gold hammer',      color:'#b8912e', kind:'hammer', hammerId:'gold'},
   {id:'glass',       pct:5,  label:'Glass hammer',     color:'#7fa8bd', kind:'hammer', hammerId:'glass'},
-  {id:'gems',        pct:10, label:'Gems',             color:'#4fae8a', kind:'gems'},
+  {id:'gems',        pct:10, label:'Forge Marks',      color:'#4fae8a', kind:'gems'},
 ];
 function pickWheelSegment(){
   const r = Math.random()*100;
@@ -3545,7 +3545,7 @@ function applyWheelReward(seg){
   } else if(seg.kind==='gems'){
     const amt = Math.random()<0.7 ? 50 : 100;
     state.gems += amt;
-    setToast('The wheel lands on '+amt+' gems!');
+    setToast('The wheel lands on '+amt+' forge marks!');
   }
 }
 
@@ -3615,7 +3615,7 @@ function upgradeStationGems(idx){
   state.gems -= cost;
   growTableGrid(st);
   const [rows, cols] = GRID_TIERS[st.tier];
-  setToast('Table '+(idx+1)+' upgraded to '+rows+'×'+cols+' with gems.');
+  setToast('Table '+(idx+1)+' upgraded to '+rows+'×'+cols+' with forge marks.');
   render();
 }
 function unlockStation(idx){
@@ -3633,7 +3633,7 @@ function buyStationGems(idx){
   if(state.level<TABLE2_CONFIG.reqLevel || state.gems<TABLE2_GEM_COST) return;
   state.gems -= TABLE2_GEM_COST;
   st.unlocked = true;
-  setToast('New crafting table unlocked with gems!');
+  setToast('New crafting table unlocked with forge marks!');
   render();
 }
 function buyHammerGems(id){
@@ -3642,7 +3642,7 @@ function buyHammerGems(id){
   state.gems -= cost;
   state.hammerInventory[id] = (state.hammerInventory[id]||0)+1;
   const hm = HAMMERS.find(h=>h.id===id);
-  setToast('Bought a '+hm.name+' for '+cost+' gems!');
+  setToast('Bought a '+hm.name+' for '+cost+' forge marks!');
   render();
 }
 // Fusion refund is cost-sum + rank-bonus based (like fusionSellPrice()), not
@@ -3785,7 +3785,7 @@ function renderShop(){
   const sub = state.shopSubTab==='gems' ? 'gems' : 'ore';
   const switcher = `<div class="row" style="gap:8px;margin-bottom:14px;">
     <button class="${sub==='ore'?'primary':''}" onclick="setShopSubTab('ore')">Ore shop</button>
-    <button class="${sub==='gems'?'primary':''}" onclick="setShopSubTab('gems')">Gem shop</button>
+    <button class="${sub==='gems'?'primary':''}" onclick="setShopSubTab('gems')">Forge Mark shop</button>
   </div>`;
   const body = sub==='ore' ? renderOreShop() : renderGemShop();
   return switcher + body;
@@ -3799,15 +3799,15 @@ function renderGemPacks(){
     const total = p.gems + p.bonus;
     return `<div class="shopRow">
       <div>
-        <b>${total.toLocaleString()} gems</b>${p.bonus? ` <span class="oreTag">(${p.gems.toLocaleString()} + ${p.bonus.toLocaleString()} bonus)</span>` : ''}
+        <b>${total.toLocaleString()} forge marks</b>${p.bonus? ` <span class="oreTag">(${p.gems.toLocaleString()} + ${p.bonus.toLocaleString()} bonus)</span>` : ''}
         <div class="small">$${p.priceUSD.toFixed(2)}</div>
       </div>
       <button onclick="purchaseGemPack('${p.id}')">${DEBUG_BUILD? '[DEBUG] Grant' : 'Buy'}</button>
     </div>`;
   }).join('');
   return `<div class="panel">
-    <div class="section-title">Buy gems</div>
-    <div class="small" style="margin-bottom:10px;">Real purchases aren't live yet &mdash; gem packs need Steam's purchasing API, which is coming with the Steam release (see the Roadmap). Sizes and prices below are a first-pass placeholder.</div>
+    <div class="section-title">Buy Forge Marks</div>
+    <div class="small" style="margin-bottom:10px;">Real purchases aren't live yet &mdash; forge mark packs need Steam's purchasing API, which is coming with the Steam release (see the Roadmap). Sizes and prices below are a first-pass placeholder.</div>
     ${rows}
   </div>`;
 }
@@ -3824,11 +3824,11 @@ function purchaseGemPack(packId){
   if(DEBUG_BUILD){
     const total = pack.gems + pack.bonus;
     state.gems += total;
-    setToast('[DEBUG] Granted '+total+' gems (retired feature, debug-only).');
+    setToast('[DEBUG] Granted '+total+' forge marks (retired feature, debug-only).');
     render();
     return;
   }
-  setToast('Gem packs aren\'t purchasable — gems are earned in-game only.');
+  setToast('Forge mark packs aren\'t purchasable — forge marks are earned in-game only.');
   render();
 }
 
@@ -3863,9 +3863,9 @@ function renderGemShop(){
     return `<div class="shopRow">
       <div>
         <b>Table ${i+1}</b>
-        <div class="small">${locked? 'Requires business level '+TABLE2_CONFIG.reqLevel : TABLE2_GEM_COST.toLocaleString()+' gems'}</div>
+        <div class="small">${locked? 'Requires business level '+TABLE2_CONFIG.reqLevel : TABLE2_GEM_COST.toLocaleString()+' forge marks'}</div>
       </div>
-      <button onclick="buyStationGems(${i})" ${canBuy?'':'disabled'}>Buy with gems</button>
+      <button onclick="buyStationGems(${i})" ${canBuy?'':'disabled'}>Buy with forge marks</button>
     </div>`;
   }).join('');
   const upgradeRows = state.stations.map((st,i)=>{
@@ -3878,9 +3878,9 @@ function renderGemShop(){
     return `<div class="shopRow">
       <div>
         <b>Table ${i+1} grid</b>
-        <div class="small">${locked? 'Requires business level '+reqLevel : 'Upgrade to '+nr+'&times;'+nc+' &mdash; '+cost.toLocaleString()+' gems'}</div>
+        <div class="small">${locked? 'Requires business level '+reqLevel : 'Upgrade to '+nr+'&times;'+nc+' &mdash; '+cost.toLocaleString()+' forge marks'}</div>
       </div>
-      <button onclick="upgradeStationGems(${i})" ${canBuy?'':'disabled'}>Buy with gems</button>
+      <button onclick="upgradeStationGems(${i})" ${canBuy?'':'disabled'}>Buy with forge marks</button>
     </div>`;
   }).join('');
   const tableRows = unlockRows + upgradeRows;
@@ -3892,12 +3892,12 @@ function renderGemShop(){
         <b>${h.name}</b> <span class="oreTag">&mdash; owned: ${state.hammerInventory[h.id]||0}</span>
         <div class="small">${h.desc}</div>
       </div>
-      <button onclick="buyHammerGems('${h.id}')" ${canBuy?'':'disabled'}>Buy 1 (${cost} gems)</button>
+      <button onclick="buyHammerGems('${h.id}')" ${canBuy?'':'disabled'}>Buy 1 (${cost} forge marks)</button>
     </div>`;
   }).join('');
   return `<div class="panel">
-    <div class="section-title">Gem shop</div>
-    <div class="small" style="margin-bottom:10px;">Spend gems &mdash; the premium currency &mdash; to instantly unlock or upgrade crafting tables, or buy hammers, skipping gold and the wheel.</div>
+    <div class="section-title">Forge Mark shop</div>
+    <div class="small" style="margin-bottom:10px;">Spend forge marks &mdash; the premium currency &mdash; to instantly unlock or upgrade crafting tables, or buy hammers, skipping gold and the wheel.</div>
     ${tableRows? `<div class="small" style="margin-bottom:4px;"><b>Crafting tables</b></div>${tableRows}` : ''}
     <div class="small" style="margin:10px 0 4px;"><b>Hammers</b></div>
     ${hammerRows}
@@ -4126,7 +4126,7 @@ function renderStation(st, i){
   if(!st.unlocked){
     const canUnlock = state.level>=TABLE2_CONFIG.reqLevel && state.gold>=TABLE2_CONFIG.cost;
     const canUnlockGems = state.level>=TABLE2_CONFIG.reqLevel && state.gems>=TABLE2_GEM_COST;
-    const reason = state.level<TABLE2_CONFIG.reqLevel ? 'Requires business level '+TABLE2_CONFIG.reqLevel : (TABLE2_CONFIG.cost.toLocaleString()+' gold or '+TABLE2_GEM_COST.toLocaleString()+' gems');
+    const reason = state.level<TABLE2_CONFIG.reqLevel ? 'Requires business level '+TABLE2_CONFIG.reqLevel : (TABLE2_CONFIG.cost.toLocaleString()+' gold or '+TABLE2_GEM_COST.toLocaleString()+' forge marks');
     return `<div class="station locked">
       <div class="title">Table ${i+1}</div>
       <div class="small">${reason}</div>
@@ -4161,7 +4161,7 @@ function renderStation(st, i){
       <button onclick="upgradeStation(${i})" ${st.tier>=MAX_TABLE_TIER?'disabled':(canUpgrade?'':'disabled')}>
         ${st.tier>=MAX_TABLE_TIER? 'Max size' : 'Upgrade to '+nextDims[0]+'&times;'+nextDims[1]+' ('+upCost.toLocaleString()+'g)'}
       </button>
-      ${st.tier<MAX_TABLE_TIER? `<button onclick="upgradeStationGems(${i})" ${canUpgradeGems?'':'disabled'}>${gemCost.toLocaleString()} gems</button>` : ''}
+      ${st.tier<MAX_TABLE_TIER? `<button onclick="upgradeStationGems(${i})" ${canUpgradeGems?'':'disabled'}>${gemCost.toLocaleString()} forge marks</button>` : ''}
     </div>
   </div>`;
 }
@@ -4351,7 +4351,7 @@ function renderExpeditionResultPopup(){
       <div class="newSwordName">${result.party}</div>
       <div class="newSwordMeta">${tier.label} tier</div>
       <div style="font:400 30px/1.2 var(--font-heading);color:var(--gold);text-align:center;margin:10px 0;">
-        +${result.goldReward.toLocaleString()} gold${result.gemsReward? ' &middot; +'+result.gemsReward+' gems' : ''}
+        +${result.goldReward.toLocaleString()} gold${result.gemsReward? ' &middot; +'+result.gemsReward+' forge marks' : ''}
       </div>
       ${(result.repReward||0)>0? `<div class="small" style="text-align:center;color:var(--accent);margin-bottom:6px;">+${result.repReward} reputation</div>` : ''}
       <div class="small" style="text-align:center;margin-bottom:14px;">
@@ -4747,7 +4747,7 @@ function renderDebug(){
       <button onclick="toggleDebug()">${state.debugOpen?'Hide':'Show'}</button>
     </div>
     ${state.debugOpen? `
-    <div class="small" style="margin:8px 0;">Gold: <b>${state.gold.toLocaleString()}</b><br>Gems: <b>${state.gems.toLocaleString()}</b><br>Reputation: <b>${state.exp}</b> / ${expToNext(state.level)} (Lvl ${state.level})</div>
+    <div class="small" style="margin:8px 0;">Gold: <b>${state.gold.toLocaleString()}</b><br>Forge Marks: <b>${state.gems.toLocaleString()}</b><br>Reputation: <b>${state.exp}</b> / ${expToNext(state.level)} (Lvl ${state.level})</div>
     <div class="row" style="gap:6px;margin-bottom:6px;">
       <button onclick="debugAddGold(100)">+100g</button>
       <button onclick="debugAddGold(1000)">+1000g</button>
@@ -4757,11 +4757,11 @@ function renderDebug(){
       <button onclick="debugAddGold(-1000)">-1000g</button>
     </div>
     <div class="row" style="gap:6px;margin-bottom:6px;">
-      <button onclick="debugAddGems(50)">+50 gems</button>
-      <button onclick="debugAddGems(500)">+500 gems</button>
+      <button onclick="debugAddGems(50)">+50 forge marks</button>
+      <button onclick="debugAddGems(500)">+500 forge marks</button>
     </div>
     <div class="row" style="gap:6px;margin-bottom:6px;">
-      <button onclick="debugAddGems(-50)">-50 gems</button>
+      <button onclick="debugAddGems(-50)">-50 forge marks</button>
     </div>
     <div class="row" style="gap:6px;margin-bottom:6px;">
       <button onclick="debugAddRep(10)">+10 rep</button>
@@ -4951,7 +4951,7 @@ function renderAchievementsModal(){
         <span style="font-size:22px;">${a.icon}</span>
         <div>
           <div style="font-weight:700;">${a.name}</div>
-          <div class="small">${a.desc} &middot; +${ACHIEVEMENT_GEM_REWARD} gems</div>
+          <div class="small">${a.desc} &middot; +${ACHIEVEMENT_GEM_REWARD} forge marks</div>
         </div>
       </div>
       <span style="font-size:18px;">${done?'✅':'🔒'}</span>
@@ -5045,14 +5045,14 @@ function renderDailyRewardPopup(){
   const reward = DAILY_LOGIN_REWARDS[popup.day-1];
   let rewardArt = '', rewardText;
   if(reward.gold) rewardText = '+'+reward.gold+' gold';
-  else if(reward.gems) rewardText = '+'+reward.gems+' gems';
+  else if(reward.gems) rewardText = '+'+reward.gems+' forge marks';
   else {
     rewardText = '+'+reward.ore+' '+matById(popup.oreId).name+' ore';
     rewardArt = `<img src="${INGOT_ICON[popup.oreId]}" alt="${matById(popup.oreId).name}" style="width:48px;height:48px;object-fit:contain;">`;
   }
   return `<div class="modalBackdrop" onclick="claimDailyLogin()">
     <div class="modalCard newSwordModalCard" onclick="event.stopPropagation()">
-      <div class="newSwordBadge">&#128197; Daily login &mdash; Day ${popup.day}</div>
+      <div class="newSwordBadge">&#128197; Daily shop opening &mdash; Day ${popup.day}</div>
       <div class="newSwordArtPanel" style="padding:26px 20px;flex-direction:column;gap:8px;">
         ${rewardArt}
         <div style="font:400 30px/1.2 var(--font-heading);color:var(--gold);text-align:center;">${rewardText}</div>
@@ -5267,7 +5267,7 @@ function renderShopSidebar(){
   <div class="panel" style="margin-top:14px;">
     <div class="section-title">Wallet</div>
     <div class="row" style="justify-content:space-between;"><span class="small">Gold</span><b>${state.gold.toLocaleString()}</b></div>
-    <div class="row" style="justify-content:space-between;margin-top:4px;"><span class="small">Gems</span><b>${state.gems.toLocaleString()}</b></div>
+    <div class="row" style="justify-content:space-between;margin-top:4px;"><span class="small">Forge Marks</span><b>${state.gems.toLocaleString()}</b></div>
   </div>
   ${nextLocked? `<div class="panel" style="margin-top:14px;">
     <div class="section-title">Next unlock</div>

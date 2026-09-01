@@ -28,7 +28,7 @@ landed yet. Latest release: [v0.1.3](../../releases/tag/v0.1.3).
   adventurers matched against specific slot requirements; a good outcome
   pays well above what those swords would earn through Orders, with a
   chance one comes back.
-- **Achievements** and a **7-day daily login** cycle of ore and gems.
+- **Achievements** and a **7-day daily shop opening** cycle of ore and forge marks.
 - **Friends** — add friends by code and visit their workshop in a real
   popout: watch their live crafting grid and hammer their ready crafts to
   help them out. Backed by a small dedicated server, not local-only.
