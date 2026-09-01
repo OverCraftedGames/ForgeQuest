@@ -1039,10 +1039,16 @@ const CRAFT_TABLE_BG = [
    its gem price is steep, since a whole second table roughly doubles capacity. Gated by
    business level too (not just gold/gems) — a second table is a big capacity jump, so it's
    meant to read as an earned milestone, not just an early impulse-buy once you scrape the gold. */
-const TABLE2_CONFIG = {reqLevel:5, cost:600};
-const TABLE2_GEM_COST = 150;
-/* Gem price to skip the gold cost of each grid-size upgrade, index = current tier. */
-const GRID_UPGRADE_GEM_COST = [15, 30, 55, 85];
+// Doubled per user feedback ("table upgrades are too cheap") — both the gold
+// and gem costs below, 600->1200 gold / 150->300 gems, unchanged relative to
+// each other so gems still buy the same ~4x convenience skip over gold they
+// always did.
+const TABLE2_CONFIG = {reqLevel:5, cost:1200};
+const TABLE2_GEM_COST = 300;
+/* Gem price to skip the gold cost of each grid-size upgrade, index = current tier.
+   Doubled alongside stationUpgradeCost()'s own multiplier below, same user
+   feedback pass — was [15, 30, 55, 85]. */
+const GRID_UPGRADE_GEM_COST = [30, 60, 110, 170];
 /* Business-level gate on each grid upgrade, index = current tier (same indexing as
    GRID_UPGRADE_GEM_COST above) — applies whether paying gold or gems, same as
    TABLE2_CONFIG.reqLevel does for the second table. Escalates alongside material
@@ -1080,7 +1086,12 @@ const SMITH_HAMMER_CRIT_BONUS = 0.12;
 /* Chance a non-magic hammer hit raises quality a tier on its own (on top of the crit
    chance above); the magic hammer's tier-up is guaranteed instead of chance-based. */
 const HAMMER_QUALITY_CHANCE = 0.3;
-function stationUpgradeCost(level){ return Math.round(250*Math.pow(level,1.7)); }
+// Base multiplier doubled (250->500) per user feedback ("table upgrades are
+// too cheap"), same pass as TABLE2_CONFIG/GRID_UPGRADE_GEM_COST above — this
+// is the sole source of the grid upgrade's GOLD cost (via upgradeGridCost()
+// below), so doubling it here covers every tier/caller at once rather than
+// hand-doubling a per-tier table.
+function stationUpgradeCost(level){ return Math.round(500*Math.pow(level,1.7)); }
 function upgradeGridCost(tier){ return stationUpgradeCost(tier+1); }
 function growTableGrid(st){
   const [oldRows, oldCols] = GRID_TIERS[st.tier];
