@@ -5,7 +5,8 @@ A cozy idle blacksmith game -- buy ore, forge it into swords on a crafting
 grid, hammer them up in quality, and fill adventurer orders to grow your
 smithy into something bigger. Discover fusion recipes, unlock passive
 mines, hire hammers with special effects, and see how big a shop you can
-build.
+build. Add friends by code to visit their workshop and help hammer their
+ready crafts.
 
 HOW TO RUN
 ----------
@@ -34,6 +35,14 @@ tell you and link you to get it -- it's a small, free Microsoft download.
 YOUR PROGRESS
 -------------
 Your save is stored locally on your own PC and persists between launches
-automatically. Nothing is uploaded anywhere.
+automatically -- that part is never uploaded anywhere.
+
+FRIENDS
+-------
+The Friends tab talks to a small backend server so you can add people by
+code and visit their workshop. A summary of what's on your crafting
+grid (not your gold, gems, or inventory) syncs there so friends can see
+it -- only people you've added and who've accepted a request back can
+see it, nobody else.
 
 Found a bug or have feedback? Let me know!
