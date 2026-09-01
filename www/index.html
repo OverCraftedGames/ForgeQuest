@@ -915,6 +915,40 @@ function checkAchievements(){
     }
   });
 }
+function achievementById(id){ return ACHIEVEMENTS.find(a=>a.id===id) || null; }
+
+/* ---------- COSMETIC PROFILE (avatar + title) ----------
+   Deliberately not a separate content table: an achievement's own icon
+   becomes an available avatar once unlocked, its own name becomes an
+   available title. Zero new content to design/art, and it gives the 14
+   existing achievements real, visible payoff beyond a toast that fades in
+   3.5s — see renderSettingsModal()'s "Profile" section for the picker. */
+// Used everywhere a friend/friend-request card currently shows initials() —
+// falls back to that exact behavior whenever no avatar is chosen. Doesn't
+// re-check unlock status here: our OWN state.avatarId is already
+// re-validated on load (see loadGame()), and a FRIEND's synced avatarId is
+// their client's claim with no local way to verify their achievements
+// anyway — same "best-effort, informational" trust level the rest of a
+// friend's synced station data already gets. achievementById() returning
+// null (an unknown/stale id) still falls back to initials safely either way.
+function renderAvatar(avatarId, fallbackLabel){
+  const a = avatarId ? achievementById(avatarId) : null;
+  return `<div class="avatar">${a ? a.icon : initials(fallbackLabel)}</div>`;
+}
+function titleFor(titleId){
+  const a = titleId ? achievementById(titleId) : null;
+  return a ? a.name : null;
+}
+function setAvatar(id){
+  if(id && !state.unlockedAchievements.has(id)) return; // can't select a locked one — no button for it either, this is just the safety net
+  state.avatarId = id; // id===null explicitly allowed, clears back to initials
+  saveGame(); render();
+}
+function setTitle(id){
+  if(id && !state.unlockedAchievements.has(id)) return;
+  state.titleId = id;
+  saveGame(); render();
+}
 
 /* Daily login streak — a 7-day cycle of escalating rewards that repeats
    indefinitely (day 7's reward loops back into day 1, not a one-time series).
@@ -1385,7 +1419,12 @@ function buildStationSnapshotPayload(){
   return {
     displayName: state.username || state.friendCode || 'A smith',
     businessLevel: state.level,
-    snapshotJson: JSON.stringify({ stations }),
+    // avatarId/titleId ride inside this free-form blob rather than as new
+    // top-level payload fields, same as `stations` itself — the backend
+    // schema (ForgeQuest-Backend's StationSnapshot table) never needs to
+    // know these exist, no migration required. See fetchFriendSnapshot()'s
+    // matching unwrap on the other end.
+    snapshotJson: JSON.stringify({ stations, avatarId: state.avatarId, titleId: state.titleId }),
   };
 }
 
@@ -1591,6 +1630,15 @@ const state = {
   expeditionDraft:null,
   stats:{swordsCrafted:0, fusionCrafted:0, ordersFulfilled:0, oreCollected:0, wheelSpins:0},
   unlockedAchievements:new Set(),
+  // Cosmetic profile — see renderAvatar()/titleFor(). Deliberately riding
+  // achievements' own icon/name rather than a separate content table: an
+  // unlocked achievement's icon becomes an available avatar, its name becomes
+  // an available title. null means "not chosen" (initials fallback / no
+  // title shown), not "locked" — a player can always unset back to null.
+  // Persisted (unlike most modal/UI flags above) since a chosen look should
+  // survive a reload same as the achievement that unlocked it.
+  avatarId:null,
+  titleId:null,
   // Forced to true after load if this is a genuinely fresh player (see the
   // `if(!hadSave)` near the bottom of the script) — not persisted itself, so
   // it doesn't need its own "seen it already" flag: the game autosaves so
@@ -1684,6 +1732,8 @@ function serializeState(){
     seqs: {sword:swordSeq, order:orderSeq, craft:craftSeq, expedition:expeditionSeq},
     stats: state.stats,
     unlockedAchievements: Array.from(state.unlockedAchievements),
+    avatarId: state.avatarId,
+    titleId: state.titleId,
     dailyStreak: state.dailyStreak,
     lastDailyClaim: state.lastDailyClaim,
     expeditionRequests: state.expeditionRequests,
@@ -1993,6 +2043,12 @@ async function loadGame(){
     }
     if(data.stats) state.stats = Object.assign({swordsCrafted:0, fusionCrafted:0, ordersFulfilled:0, oreCollected:0, wheelSpins:0}, data.stats);
     state.unlockedAchievements = new Set(data.unlockedAchievements||[]);
+    // Re-validated against the achievements Set just restored above, not
+    // trusted blindly — a hand-edited save claiming an avatar/title whose
+    // achievement was never actually unlocked falls back to null (initials/
+    // no title) rather than displaying something never earned.
+    state.avatarId = (data.avatarId && state.unlockedAchievements.has(data.avatarId)) ? data.avatarId : null;
+    state.titleId = (data.titleId && state.unlockedAchievements.has(data.titleId)) ? data.titleId : null;
     state.dailyStreak = data.dailyStreak ?? 0;
     state.lastDailyClaim = data.lastDailyClaim ?? null;
     state.expeditionRequests = data.expeditionRequests || [];
@@ -3093,7 +3149,10 @@ async function fetchFriendSnapshot(playerId){
     // craftings array is nested inside it, not a top-level response field.
     let parsed;
     try{ parsed = JSON.parse(raw.snapshotJson); }catch(e){ parsed = {}; }
-    return {displayName: raw.displayName, businessLevel: raw.businessLevel, stations: parsed.stations||[]};
+    return {
+      displayName: raw.displayName, businessLevel: raw.businessLevel, stations: parsed.stations||[],
+      avatarId: parsed.avatarId||null, titleId: parsed.titleId||null,
+    };
   }catch(e){ return {error:true}; }
 }
 
@@ -3106,6 +3165,13 @@ function applyFriendSnapshotToEntry(friend, snapshot){
   if(snapshot.displayName) friend.displayName = snapshot.displayName;
   friend.businessLevel = snapshot.businessLevel;
   friend.stations = snapshot.stations;
+  // Unlike displayName above, a friend's avatar/title CAN change any time
+  // (see setAvatar()/setTitle() — freely re-selectable, not one-time like
+  // the name), so this always takes the latest fetched value rather than
+  // "fill in if missing" — null is a real, current choice, not "not synced
+  // yet", and should clear a stale one just as readily as it sets a new one.
+  friend.avatarId = snapshot.avatarId;
+  friend.titleId = snapshot.titleId;
 }
 
 // Sends a real friend REQUEST, not an immediate add — the target has to
@@ -4612,11 +4678,12 @@ function renderFriends(){
     const statusLine = stations.length
       ? (readyCount ? readyCount+' station'+(readyCount>1?'s':'')+' ready for a hammer hit' : 'Nothing ready right now')
       : "Visit to see what's on their workbench.";
+    const friendTitle = titleFor(f.titleId);
     return `<div class="friendCard">
       <div class="friendInfo">
-        <div class="avatar">${initials(label)}</div>
+        ${renderAvatar(f.avatarId, label)}
         <div>
-          <b>${label}</b>
+          <b>${label}</b>${friendTitle? ` <span class="small" style="color:var(--gold);">&middot; ${friendTitle}</span>` : ''}
           ${mini ? `<div class="miniStations" style="margin-top:4px;">${mini}</div>` : ''}
           <div class="small" style="margin-top:4px;">${statusLine}</div>
         </div>
@@ -4711,6 +4778,42 @@ function renderUsernamePromptModal(){
   </div>`;
 }
 
+// Avatar/title picker, riding entirely on ACHIEVEMENTS — see the "COSMETIC
+// PROFILE" doc comment up near checkAchievements() for why there's no
+// separate content table. Locked entries follow renderAchievementsModal()'s
+// own opacity/lock-icon convention so this reads as the same system, not a
+// new one. Includes an explicit "None" option for each slot so a choice is
+// always reversible, not just replaceable.
+function renderProfilePicker(){
+  const avatarBtns = ACHIEVEMENTS.map(a=>{
+    const done = state.unlockedAchievements.has(a.id);
+    const selected = state.avatarId===a.id;
+    return `<button type="button" title="${done? a.name : a.name+' (locked — '+a.desc+')'}"
+      style="font-size:18px;padding:6px 10px;opacity:${done?'1':'.4'};${selected?'border-color:var(--accent);background:var(--accent-100);':''}"
+      ${done?`onclick="setAvatar('${a.id}')"`:'disabled'}>${a.icon}</button>`;
+  }).join('');
+  const titleBtns = ACHIEVEMENTS.map(a=>{
+    const done = state.unlockedAchievements.has(a.id);
+    const selected = state.titleId===a.id;
+    return `<button type="button" title="${done? '' : 'Locked — '+a.desc}"
+      style="opacity:${done?'1':'.4'};${selected?'border-color:var(--accent);background:var(--accent-100);':''}"
+      ${done?`onclick="setTitle('${a.id}')"`:'disabled'}>${a.name}</button>`;
+  }).join('');
+  return `<div style="margin-bottom:14px;padding:10px 0;border-top:1px solid rgba(32,30,29,.1);border-bottom:1px solid rgba(32,30,29,.1);">
+    <div class="small" style="margin-bottom:6px;">Avatar &amp; title &mdash; unlocked by achievements, freely changeable</div>
+    <div class="small" style="font-weight:700;margin-bottom:4px;">Avatar</div>
+    <div class="row" style="flex-wrap:wrap;gap:6px;margin-bottom:10px;">
+      <button type="button" style="${state.avatarId===null?'border-color:var(--accent);background:var(--accent-100);':''}" onclick="setAvatar(null)">None</button>
+      ${avatarBtns}
+    </div>
+    <div class="small" style="font-weight:700;margin-bottom:4px;">Title</div>
+    <div class="row" style="flex-wrap:wrap;gap:6px;">
+      <button type="button" style="${state.titleId===null?'border-color:var(--accent);background:var(--accent-100);':''}" onclick="setTitle(null)">None</button>
+      ${titleBtns}
+    </div>
+  </div>`;
+}
+
 function renderSettingsModal(){
   return `<div class="modalBackdrop" onclick="toggleSettings()">
     <div class="modalCard" onclick="event.stopPropagation()">
@@ -4720,8 +4823,12 @@ function renderSettingsModal(){
       </div>
       <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px;">
         <span class="small">Name</span>
-        <span style="font-weight:700;">${state.username||'—'}</span>
+        <span class="row" style="gap:8px;align-items:center;">
+          ${renderAvatar(state.avatarId, state.username)}
+          <span style="font-weight:700;">${state.username||'—'}${titleFor(state.titleId)? ` <span style="color:var(--gold);font-weight:400;">&middot; ${titleFor(state.titleId)}</span>` : ''}</span>
+        </span>
       </div>
+      ${renderProfilePicker()}
       <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:14px;">
         <span class="small">Friend code</span>
         ${state.friendStatus==='ready' ? `
