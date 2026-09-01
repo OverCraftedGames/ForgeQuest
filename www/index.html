@@ -997,7 +997,7 @@ function checkDailyLogin(){
   // Same mutual-exclusion convention as every other popup opener in this file.
   state.mineOpen=false; state.catalogOpen=false; state.settingsOpen=false; state.hammerInventoryOpen=false;
   state.swordInventoryModalOpen=false; state.tutorialOpen=false; state.achievementsOpen=false; state.wheelOpen=false;
-  state.newSwordPopup=null; state.expeditionsOpen=false;
+  state.newSwordPopup=null; state.expeditionsOpen=false; state.profileOpen=false;
 }
 function claimDailyLogin(){
   const popup = state.dailyRewardPopup;
@@ -1586,6 +1586,9 @@ const state = {
   hammerInventoryOpen:false,
   swordInventoryModalOpen:false,
   achievementsOpen:false,
+  // The avatar/title picker's own popout (see toggleProfile()/renderProfileModal()) —
+  // not persisted, same as every other modal-open flag on this list.
+  profileOpen:false,
   settingsResetConfirm:false,
   // Set to the just-collected sword object the moment it's a genuinely new
   // discovery (see completeCraft()) — not persisted, same as every other
@@ -2117,7 +2120,7 @@ function toggleMuted(){ state.muted = !state.muted; musicPlayerA.muted = state.m
 function toggleSettings(){
   state.settingsOpen = !state.settingsOpen;
   state.settingsResetConfirm = false; // never leave the confirm step open across a close/reopen
-  if(state.settingsOpen){ state.mineOpen=false; state.catalogOpen=false; state.hammerInventoryOpen=false; state.swordInventoryModalOpen=false; state.tutorialOpen=false; state.achievementsOpen=false; state.wheelOpen=false; state.newSwordPopup=null; state.dailyRewardPopup=null; state.expeditionsOpen=false; }
+  if(state.settingsOpen){ state.mineOpen=false; state.catalogOpen=false; state.hammerInventoryOpen=false; state.swordInventoryModalOpen=false; state.tutorialOpen=false; state.achievementsOpen=false; state.wheelOpen=false; state.newSwordPopup=null; state.dailyRewardPopup=null; state.expeditionsOpen=false; state.profileOpen=false; }
   render();
 }
 // Player-facing reset, reachable from Settings — distinct from debugResetGame()
@@ -2129,10 +2132,22 @@ function cancelResetGameProfile(){ state.settingsResetConfirm = false; render();
 async function confirmResetGameProfile(){ isResetting = true; await clearSave(); location.reload(); }
 function toggleAchievements(){
   state.achievementsOpen = !state.achievementsOpen;
-  if(state.achievementsOpen){ state.mineOpen=false; state.catalogOpen=false; state.hammerInventoryOpen=false; state.swordInventoryModalOpen=false; state.tutorialOpen=false; state.settingsOpen=false; state.wheelOpen=false; state.newSwordPopup=null; state.dailyRewardPopup=null; state.expeditionsOpen=false; }
+  if(state.achievementsOpen){ state.mineOpen=false; state.catalogOpen=false; state.hammerInventoryOpen=false; state.swordInventoryModalOpen=false; state.tutorialOpen=false; state.settingsOpen=false; state.wheelOpen=false; state.newSwordPopup=null; state.dailyRewardPopup=null; state.expeditionsOpen=false; state.profileOpen=false; }
   render();
 }
 function closeAchievements(){ state.achievementsOpen = false; render(); }
+
+// Its own popout, opened from a dedicated button in the Friends tab header
+// (renderFriends()) rather than living inline in Settings — this is what
+// friends actually SEE (renderAvatar()/titleFor() on their friend card), so
+// it earns its own entry point next to "Your friends" instead of being
+// buried under Settings' unrelated audio/save controls.
+function toggleProfile(){
+  state.profileOpen = !state.profileOpen;
+  if(state.profileOpen){ state.mineOpen=false; state.catalogOpen=false; state.hammerInventoryOpen=false; state.swordInventoryModalOpen=false; state.tutorialOpen=false; state.settingsOpen=false; state.achievementsOpen=false; state.wheelOpen=false; state.newSwordPopup=null; state.dailyRewardPopup=null; state.expeditionsOpen=false; }
+  render();
+}
+function closeProfile(){ state.profileOpen = false; render(); }
 
 /* ---------- TUTORIAL ---------- */
 const TUTORIAL_STEPS = [
@@ -2147,7 +2162,7 @@ const TUTORIAL_STEPS = [
 function openTutorial(){
   state.tutorialStep = 0;
   state.tutorialOpen = true;
-  state.mineOpen=false; state.catalogOpen=false; state.settingsOpen=false; state.hammerInventoryOpen=false; state.swordInventoryModalOpen=false; state.achievementsOpen=false; state.wheelOpen=false; state.newSwordPopup=null; state.dailyRewardPopup=null; state.expeditionsOpen=false;
+  state.mineOpen=false; state.catalogOpen=false; state.settingsOpen=false; state.hammerInventoryOpen=false; state.swordInventoryModalOpen=false; state.achievementsOpen=false; state.wheelOpen=false; state.newSwordPopup=null; state.dailyRewardPopup=null; state.expeditionsOpen=false; state.profileOpen=false;
   render();
 }
 function closeTutorial(){ state.tutorialOpen = false; render(); }
@@ -2795,7 +2810,7 @@ function showNewSwordPopup(sword){
   state.newSwordPopup = sword;
   state.mineOpen=false; state.catalogOpen=false; state.settingsOpen=false; state.hammerInventoryOpen=false;
   state.swordInventoryModalOpen=false; state.tutorialOpen=false; state.achievementsOpen=false; state.wheelOpen=false;
-  state.dailyRewardPopup=null; state.expeditionsOpen=false;
+  state.dailyRewardPopup=null; state.expeditionsOpen=false; state.profileOpen=false;
   playSwordDiscoverySfx();
 }
 function closeNewSwordPopup(){ state.newSwordPopup = null; render(); }
@@ -2809,7 +2824,7 @@ function viewNewSwordInCatalog(){
   state.catalogOpen = true;
   state.mineOpen=false; state.settingsOpen=false; state.hammerInventoryOpen=false;
   state.swordInventoryModalOpen=false; state.tutorialOpen=false; state.achievementsOpen=false; state.wheelOpen=false;
-  state.dailyRewardPopup=null; state.expeditionsOpen=false;
+  state.dailyRewardPopup=null; state.expeditionsOpen=false; state.profileOpen=false;
   selectCatalogMat(sword.fusion ? 'fusion' : sword.materialId);
 }
 
@@ -3331,7 +3346,7 @@ async function visitFriend(id){
   // not an in-tab panel, so it shouldn't stack behind/under one of those.
   state.mineOpen=false; state.catalogOpen=false; state.settingsOpen=false; state.hammerInventoryOpen=false;
   state.swordInventoryModalOpen=false; state.tutorialOpen=false; state.achievementsOpen=false; state.wheelOpen=false;
-  state.expeditionsOpen=false;
+  state.expeditionsOpen=false; state.profileOpen=false;
   render();
   const snapshot = await fetchFriendSnapshot(id);
   const friend = state.friends.find(f=>f.id===id);
@@ -3527,7 +3542,7 @@ function openWheel(){
   if(!wheelReady()) return;
   state.lastSpinAt = Date.now();
   state.stats.wheelSpins++;
-  state.mineOpen=false; state.catalogOpen=false; state.settingsOpen=false; state.hammerInventoryOpen=false; state.swordInventoryModalOpen=false; state.tutorialOpen=false; state.achievementsOpen=false; state.wheelOpen=false; state.newSwordPopup=null; state.dailyRewardPopup=null; state.expeditionsOpen=false;
+  state.mineOpen=false; state.catalogOpen=false; state.settingsOpen=false; state.hammerInventoryOpen=false; state.swordInventoryModalOpen=false; state.tutorialOpen=false; state.achievementsOpen=false; state.wheelOpen=false; state.newSwordPopup=null; state.dailyRewardPopup=null; state.expeditionsOpen=false; state.profileOpen=false;
   state.wheelOpen = true;
   state.wheelSpinning = true;
   if(!state.wheelRotationDeg) state.wheelRotationDeg = 0;
@@ -3647,7 +3662,7 @@ function setTab(t){
   if(t==='friends') refreshFriendsRoster();
   render();
 }
-function toggleMineOverview(){ state.mineOpen = !state.mineOpen; if(state.mineOpen){ state.catalogOpen=false; state.settingsOpen=false; state.hammerInventoryOpen=false; state.swordInventoryModalOpen=false; state.tutorialOpen=false; state.achievementsOpen=false; state.wheelOpen=false; state.newSwordPopup=null; state.dailyRewardPopup=null; state.expeditionsOpen=false; } render(); }
+function toggleMineOverview(){ state.mineOpen = !state.mineOpen; if(state.mineOpen){ state.catalogOpen=false; state.settingsOpen=false; state.hammerInventoryOpen=false; state.swordInventoryModalOpen=false; state.tutorialOpen=false; state.achievementsOpen=false; state.wheelOpen=false; state.newSwordPopup=null; state.dailyRewardPopup=null; state.expeditionsOpen=false; state.profileOpen=false; } render(); }
 function closeMineOverview(){ state.mineOpen = false; render(); }
 function selectMine(id){ state.selectedMineId = state.selectedMineId===id ? null : id; render(); }
 function collectMineOre(id){
@@ -3662,7 +3677,7 @@ function collectMineOre(id){
   setToast(mine.icon+' Collected '+summary+' ore from '+mine.name+'!');
   render();
 }
-function toggleCatalogOverview(){ state.catalogOpen = !state.catalogOpen; if(state.catalogOpen){ state.mineOpen=false; state.settingsOpen=false; state.hammerInventoryOpen=false; state.swordInventoryModalOpen=false; state.tutorialOpen=false; state.achievementsOpen=false; state.wheelOpen=false; state.newSwordPopup=null; state.dailyRewardPopup=null; state.expeditionsOpen=false; } render(); }
+function toggleCatalogOverview(){ state.catalogOpen = !state.catalogOpen; if(state.catalogOpen){ state.mineOpen=false; state.settingsOpen=false; state.hammerInventoryOpen=false; state.swordInventoryModalOpen=false; state.tutorialOpen=false; state.achievementsOpen=false; state.wheelOpen=false; state.newSwordPopup=null; state.dailyRewardPopup=null; state.expeditionsOpen=false; state.profileOpen=false; } render(); }
 function toggleExpeditionsOverview(){
   // The nav button is always visible now (was hidden below level 8) — this
   // is what actually gates access. Never even flips expeditionsOpen to true
@@ -3677,7 +3692,7 @@ function toggleExpeditionsOverview(){
   if(state.expeditionsOpen){
     state.mineOpen=false; state.catalogOpen=false; state.settingsOpen=false; state.hammerInventoryOpen=false;
     state.swordInventoryModalOpen=false; state.tutorialOpen=false; state.achievementsOpen=false; state.wheelOpen=false;
-    state.newSwordPopup=null; state.dailyRewardPopup=null;
+    state.newSwordPopup=null; state.dailyRewardPopup=null; state.profileOpen=false;
   }
   render();
 }
@@ -3686,7 +3701,7 @@ function toggleExpeditionsOverview(){
 // overlays, just triggered from a plain button instead of a tab icon.
 function toggleHammerInventory(){
   state.hammerInventoryOpen = !state.hammerInventoryOpen;
-  if(state.hammerInventoryOpen){ state.mineOpen=false; state.catalogOpen=false; state.settingsOpen=false; state.swordInventoryModalOpen=false; state.tutorialOpen=false; state.achievementsOpen=false; state.wheelOpen=false; state.newSwordPopup=null; state.dailyRewardPopup=null; state.expeditionsOpen=false; }
+  if(state.hammerInventoryOpen){ state.mineOpen=false; state.catalogOpen=false; state.settingsOpen=false; state.swordInventoryModalOpen=false; state.tutorialOpen=false; state.achievementsOpen=false; state.wheelOpen=false; state.newSwordPopup=null; state.dailyRewardPopup=null; state.expeditionsOpen=false; state.profileOpen=false; }
   render();
 }
 // The sidebar inventory list is capped (see renderInventoryPanel) so it can
@@ -3695,7 +3710,7 @@ function toggleHammerInventory(){
 // catalog/hammer overlays above.
 function toggleInventoryModal(){
   state.swordInventoryModalOpen = !state.swordInventoryModalOpen;
-  if(state.swordInventoryModalOpen){ state.mineOpen=false; state.catalogOpen=false; state.settingsOpen=false; state.hammerInventoryOpen=false; state.tutorialOpen=false; state.achievementsOpen=false; state.wheelOpen=false; state.newSwordPopup=null; state.dailyRewardPopup=null; state.expeditionsOpen=false; }
+  if(state.swordInventoryModalOpen){ state.mineOpen=false; state.catalogOpen=false; state.settingsOpen=false; state.hammerInventoryOpen=false; state.tutorialOpen=false; state.achievementsOpen=false; state.wheelOpen=false; state.newSwordPopup=null; state.dailyRewardPopup=null; state.expeditionsOpen=false; state.profileOpen=false; }
   render();
 }
 function closeCatalogOverview(){ state.catalogOpen = false; render(); }
@@ -4695,7 +4710,10 @@ function renderFriends(){
     </div>`;
   }).join('');
   return `<div class="panel">
-    <div class="section-title">Your friends (${state.friends.length})</div>
+    <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:4px;">
+      <div class="section-title" style="margin:0;">Your friends (${state.friends.length})</div>
+      <button type="button" onclick="toggleProfile()">Your Profile</button>
+    </div>
     ${friendRows}
   </div>`;
 }
@@ -4814,6 +4832,29 @@ function renderProfilePicker(){
   </div>`;
 }
 
+// Opened from a dedicated button in the Friends tab header (see toggleProfile()'s
+// doc comment for why it's not just folded into Settings) — a real popout,
+// same modalBackdrop/modalCard shape as every other one here.
+function renderProfileModal(){
+  return `<div class="modalBackdrop" onclick="toggleProfile()">
+    <div class="modalCard" onclick="event.stopPropagation()">
+      <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <h3 class="section-title" style="margin:0;">Your Profile</h3>
+        <button onclick="toggleProfile()">Close</button>
+      </div>
+      <div class="row" style="align-items:center;gap:10px;margin-bottom:14px;">
+        ${renderAvatar(state.avatarId, state.username)}
+        <div>
+          <div style="font-weight:700;">${state.username||'—'}</div>
+          <div class="small">${titleFor(state.titleId) || 'No title chosen'}</div>
+        </div>
+      </div>
+      <div class="small" style="margin-bottom:10px;">This is what friends see on your friend card when they visit. Unlocked by achievements &mdash; see the Achievements list for what's still locked.</div>
+      ${renderProfilePicker()}
+    </div>
+  </div>`;
+}
+
 function renderSettingsModal(){
   return `<div class="modalBackdrop" onclick="toggleSettings()">
     <div class="modalCard" onclick="event.stopPropagation()">
@@ -4821,14 +4862,13 @@ function renderSettingsModal(){
         <h3 class="section-title" style="margin:0;">Settings</h3>
         <button onclick="toggleSettings()">Close</button>
       </div>
-      <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:14px;">
         <span class="small">Name</span>
         <span class="row" style="gap:8px;align-items:center;">
           ${renderAvatar(state.avatarId, state.username)}
           <span style="font-weight:700;">${state.username||'—'}${titleFor(state.titleId)? ` <span style="color:var(--gold);font-weight:400;">&middot; ${titleFor(state.titleId)}</span>` : ''}</span>
         </span>
       </div>
-      ${renderProfilePicker()}
       <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:14px;">
         <span class="small">Friend code</span>
         ${state.friendStatus==='ready' ? `
@@ -5274,7 +5314,7 @@ function render(){
   const debugPanel = document.getElementById('debugPanel');
   if(debugPanel) debugPanel.innerHTML = renderDebug();
   const modalRoot = document.getElementById('modalRoot');
-  if(modalRoot) modalRoot.innerHTML = state.usernamePromptOpen ? renderUsernamePromptModal() : (state.friendHitPopup ? renderFriendHitPopup() : (state.newSwordPopup ? renderNewSwordPopup() : (state.expeditionResultQueue.length ? renderExpeditionResultPopup() : (state.dailyRewardPopup ? renderDailyRewardPopup() : (state.tutorialOpen ? renderTutorialModal() : (state.mineOpen ? renderMineOverview() : (state.catalogOpen ? renderCatalogOverview() : (state.settingsOpen ? renderSettingsModal() : (state.swordInventoryModalOpen ? renderInventoryModal() : (state.achievementsOpen ? renderAchievementsModal() : (state.wheelOpen ? renderWheelModal() : (state.expeditionsOpen ? renderExpeditionOverview() : (state.visitingFriendId ? renderFriendVisitModal() : '')))))))))))));
+  if(modalRoot) modalRoot.innerHTML = state.usernamePromptOpen ? renderUsernamePromptModal() : (state.friendHitPopup ? renderFriendHitPopup() : (state.newSwordPopup ? renderNewSwordPopup() : (state.expeditionResultQueue.length ? renderExpeditionResultPopup() : (state.dailyRewardPopup ? renderDailyRewardPopup() : (state.tutorialOpen ? renderTutorialModal() : (state.mineOpen ? renderMineOverview() : (state.catalogOpen ? renderCatalogOverview() : (state.settingsOpen ? renderSettingsModal() : (state.swordInventoryModalOpen ? renderInventoryModal() : (state.achievementsOpen ? renderAchievementsModal() : (state.profileOpen ? renderProfileModal() : (state.wheelOpen ? renderWheelModal() : (state.expeditionsOpen ? renderExpeditionOverview() : (state.visitingFriendId ? renderFriendVisitModal() : ''))))))))))))));
   // Must run AFTER the innerHTML assignment above (needs the real DOM node
   // to measure) — see fitFriendVisitContent()'s own comment for why this
   // scales instead of scrolling.
