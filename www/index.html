@@ -1077,7 +1077,9 @@ function copyFriendCode(){
 function saveUsername(){
   const input = document.getElementById('usernameInput');
   const name = (input.value||'').trim().slice(0, 24);
-  if(!name){ setToast('Enter a name first.'); return; }
+  // render() on both early-outs too — same "toast set but never painted"
+  // bug fixed across the other friends functions.
+  if(!name){ setToast('Enter a name first.'); render(); return; }
   const identity = loadFriendIdentity();
   if(!identity) return; // shouldn't be reachable — this modal only opens once identity exists
   identity.username = name;
@@ -2571,8 +2573,14 @@ function applyFriendSnapshotToEntry(friend, snapshot){
 async function addFriendByCode(){
   const input = document.getElementById('friendCodeInput');
   const code = (input.value||'').trim().toUpperCase();
-  if(!code) return;
-  if(state.friendCode && code===state.friendCode){ setToast("That's your own friend code."); return; }
+  // These two checks are BEFORE the try/finally below on purpose (no
+  // input.disabled to reset yet) — each needs its own render() rather than
+  // relying on finally's, unlike everything after this point. Missing
+  // render() on a setToast() call is exactly the bug this whole function
+  // just got fixed for (caught from a real bug report, not in theory) —
+  // don't reintroduce it here.
+  if(!code){ setToast('Enter a friend code first.'); render(); return; }
+  if(state.friendCode && code===state.friendCode){ setToast("That's your own friend code."); render(); return; }
   input.disabled = true;
   try{
     const lookup = await fetch(FRIENDS_API_BASE+'/api/players/by-code/'+encodeURIComponent(code));
@@ -2604,11 +2612,17 @@ async function addFriendByCode(){
         : 'Added '+(friend.displayName||friend.friendCode)+' as a friend!');
     }
     input.value='';
-    render();
   }catch(e){
     setToast("Couldn't reach the friends server — try again in a moment.");
   }finally{
+    // Unconditional, unlike the old version's render() call that only sat
+    // at the end of the SUCCESS path — every early `return` above (a bad
+    // code, an unreachable server, an already-added friend, a plain empty
+    // box) used to set a toast that then never actually painted, which is
+    // exactly what "pressing Add did nothing" was: the toast was real, the
+    // screen just never updated to show it.
     input.disabled = false;
+    render();
   }
 }
 function removeFriend(id){
@@ -2633,24 +2647,29 @@ async function checkIncomingFriendRequests(){
 }
 
 async function acceptFriendRequest(fromPlayerId){
+  // Same bug class fixed in addFriendByCode() — every exit here goes
+  // through the finally's render() now, not just the success path.
   try{
     const resp = await fetch(FRIENDS_API_BASE+'/api/friends/requests/'+encodeURIComponent(fromPlayerId)+'/accept', {
       method:'POST', headers: friendAuthHeaders(),
     });
     if(!resp.ok){ setToast("Couldn't reach the friends server — try again in a moment."); return; }
-  }catch(e){ setToast("Couldn't reach the friends server — try again in a moment."); return; }
 
-  const req = state.incomingFriendRequests.find(r=>r.fromPlayerId===fromPlayerId);
-  state.incomingFriendRequests = state.incomingFriendRequests.filter(r=>r.fromPlayerId!==fromPlayerId);
-  const friend = {id:fromPlayerId, friendCode:null, displayName: req?.fromDisplayName||null};
-  // Now allowed, since the Friendship row exists as of the accept call
-  // above — grabs their real board state right away instead of waiting
-  // for the next roster refresh.
-  applyFriendSnapshotToEntry(friend, await fetchFriendSnapshot(fromPlayerId));
-  state.friends.push(friend);
-  saveGame();
-  setToast((friend.displayName||'They')+' are now your friend!');
-  render();
+    const req = state.incomingFriendRequests.find(r=>r.fromPlayerId===fromPlayerId);
+    state.incomingFriendRequests = state.incomingFriendRequests.filter(r=>r.fromPlayerId!==fromPlayerId);
+    const friend = {id:fromPlayerId, friendCode:null, displayName: req?.fromDisplayName||null};
+    // Now allowed, since the Friendship row exists as of the accept call
+    // above — grabs their real board state right away instead of waiting
+    // for the next roster refresh.
+    applyFriendSnapshotToEntry(friend, await fetchFriendSnapshot(fromPlayerId));
+    state.friends.push(friend);
+    saveGame();
+    setToast((friend.displayName||'They')+' are now your friend!');
+  }catch(e){
+    setToast("Couldn't reach the friends server — try again in a moment.");
+  }finally{
+    render();
+  }
 }
 
 async function declineFriendRequest(fromPlayerId){
@@ -2733,7 +2752,10 @@ async function hammerFriendCraft(targetPlayerId, stationIdx, craftId, hammerId){
   // the fetched snapshot) aren't enough on their own.
   const sentHits = loadSentFriendHits();
   const key = sentHitKey(targetPlayerId, craftId, hammerId);
-  if(sentHits.has(key)){ setToast("You've already hit that one."); return; }
+  // render() here, unlike this function's other early returns above, since
+  // this is the one that actually sets a toast — same "a toast nobody ever
+  // painted" bug fixed in addFriendByCode()/acceptFriendRequest().
+  if(sentHits.has(key)){ setToast("You've already hit that one."); render(); return; }
 
   if(hammerId!=='smith') state.hammerInventory[hammerId] -= 1;
   state.gold += 5;
