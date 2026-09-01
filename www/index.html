@@ -1058,18 +1058,21 @@ const GRID_UPGRADE_REQ_LEVEL = [2, 4, 7, 11];
 /* Premium (gem) prices to buy a single hammer token directly, skipping the wheel. */
 const HAMMER_GEM_COST = {fire:25, magic:45, obsidian:30, gold:35, glass:20};
 
-/* Real-money gem packs — framework only, ahead of Steam integration (see
-   README Roadmap: "Steamworks integration" hasn't landed, and Steam's
-   microtransaction API is the only payment rail this game is planned to
-   use, no separate processor). purchaseGemPack() below can't actually
-   charge anyone yet, so this exists to get the pricing/UI/data shape
-   built and screenshot-able now rather than blocking on Steam. `sku` is a
-   placeholder Steam item id to wire up later; everything else renders
-   straight from this array (see renderGemPacks()). Sizes/prices are a
-   rough first pass sized off the existing gem economy (a hammer runs
-   20-45 gems, a full 2nd table 150, grid upgrades 15-85 — so ~100 gems
-   should feel like "one hammer," not pocket change) rather than any real
-   market research — retune freely before this ever ships for real. */
+/* RETIRED, kept dormant rather than deleted — see renderShop()'s own doc
+   comment for the decision. This was originally framed as "framework ahead
+   of Steam integration," but the actual call ended up being: ForgeQuest
+   ships as a one-time-purchase game, gems earned entirely for free, no
+   real-money IAP at all. Not reachable from the UI (no "Buy gems" tab
+   anymore), and purchaseGemPack() was never wired to a real payment rail
+   to begin with, so nothing here can charge anyone regardless. Left in
+   place because it's cheap to have built and could become a real, optional
+   cosmetic-pack DLC later if the game does well post-launch — `sku` was a
+   placeholder Steam item id for that possible future, everything else
+   renders straight from this array (see renderGemPacks(), also unreachable
+   but intact). Sizes/prices were a rough first pass sized off the gem
+   economy at the time (a hammer runs 20-45 gems, a full 2nd table 150,
+   grid upgrades 15-85), not real market research — re-derive before ever
+   reviving this, don't just flip it back on as-is. */
 const GEM_PACKS = [
   {id:'pouch',   gems:100,  bonus:0,   priceUSD:0.99,  sku:'gems_pouch_100'},
   {id:'satchel', gems:300,  bonus:30,  priceUSD:2.99,  sku:'gems_satchel_330'},
@@ -3769,21 +3772,28 @@ function setShopSubTab(t){ state.shopSubTab = t; render(); }
 
 // Split into two sub-tabs (ore vs. gems) so each fits on screen without scrolling,
 // instead of one long panel stacking both shops.
+//
+// RETIRED: a third "Buy gems" sub-tab (real-money gem packs, see GEM_PACKS'
+// own doc comment further down) used to live here. Explicit decision: this
+// ships as a one-time-purchase game with gems earned entirely for free, no
+// real-money IAP. Removed from the switcher/render path so players never
+// see a purchase prompt that goes nowhere, but GEM_PACKS/renderGemPacks()/
+// purchaseGemPack() are left in place, unreachable rather than deleted --
+// cheap to revive as an optional cosmetic-pack DLC later if the game does
+// well, without rebuilding the pricing/UI groundwork from scratch.
 function renderShop(){
-  const sub = state.shopSubTab==='gems' ? 'gems' : state.shopSubTab==='buygems' ? 'buygems' : 'ore';
+  const sub = state.shopSubTab==='gems' ? 'gems' : 'ore';
   const switcher = `<div class="row" style="gap:8px;margin-bottom:14px;">
     <button class="${sub==='ore'?'primary':''}" onclick="setShopSubTab('ore')">Ore shop</button>
     <button class="${sub==='gems'?'primary':''}" onclick="setShopSubTab('gems')">Gem shop</button>
-    <button class="${sub==='buygems'?'primary':''}" onclick="setShopSubTab('buygems')">Buy gems</button>
   </div>`;
-  const body = sub==='ore' ? renderOreShop() : sub==='gems' ? renderGemShop() : renderGemPacks();
+  const body = sub==='ore' ? renderOreShop() : renderGemShop();
   return switcher + body;
 }
 
-// Framework-only for now — see GEM_PACKS' doc comment. Renders real pricing/
-// UI so the flow is screenshot-able and the Buy button is wired end-to-end,
-// but purchaseGemPack() (below renderGemPacks()) can't actually take anyone's
-// money without Steam's purchasing API, which isn't integrated yet.
+// RETIRED, unreachable from the UI — see GEM_PACKS' doc comment for the
+// decision (one-time-purchase game, no real-money IAP). Left intact rather
+// than deleted in case a cosmetic-pack DLC gets revisited post-launch.
 function renderGemPacks(){
   const rows = GEM_PACKS.map(p=>{
     const total = p.gems + p.bonus;
@@ -3802,24 +3812,23 @@ function renderGemPacks(){
   </div>`;
 }
 
-// Stub on purpose: there's no payment processor wired in yet (see GEM_PACKS'
-// doc comment), so this can't charge real money. In a DEBUG_BUILD it grants
-// the gems directly so the rest of the flow (UI, gem-spend paths) can be
-// exercised without needing Steam; in a real build it's honest with the
-// player instead of pretending a purchase happened. Swap this out for a
-// real Steamworks microtransaction call (and a server-side receipt check)
-// when that integration lands — the UI/data side won't need to change.
+// RETIRED, unreachable from the UI (see GEM_PACKS' doc comment) — no path
+// in the game calls this anymore, since renderGemPacks() is no longer
+// reachable either. Left intact, still functionally a no-op-for-real-money
+// stub, purely so a future cosmetic-pack revival wouldn't need to rebuild
+// this from scratch. Do not wire this to a real payment rail as-is; the
+// gem economy/pricing here predates the decision to not sell gems at all.
 function purchaseGemPack(packId){
   const pack = GEM_PACKS.find(p=>p.id===packId);
   if(!pack) return;
   if(DEBUG_BUILD){
     const total = pack.gems + pack.bonus;
     state.gems += total;
-    setToast('[DEBUG] Granted '+total+' gems (real purchases need Steam integration).');
+    setToast('[DEBUG] Granted '+total+' gems (retired feature, debug-only).');
     render();
     return;
   }
-  setToast('Gem packs aren\'t purchasable yet &mdash; coming with the Steam release.');
+  setToast('Gem packs aren\'t purchasable — gems are earned in-game only.');
   render();
 }
 
