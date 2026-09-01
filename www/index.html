@@ -438,10 +438,14 @@
      — but the same large-popout sizing/shell so it reads as the same kind
      of "leave the tab, look at a whole other place" overlay. */
   .friendVisitModal{
-    width:min(720px,92vw);height:min(600px,86vh);
+    width:min(900px,92vw);height:min(680px,86vh);
     background:#f5ead8;border:1.5px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);
     padding:24px;overflow-y:auto;position:relative;
   }
+  /* Friend's grid is read-only (no ore palette, no fire/upgrade UI) but
+     otherwise reuses .station/.craftGridWrap's real look — see
+     renderFriendStationGrid(). */
+  .friendStationCard{margin-bottom:18px;}
   .catalogModal{
     display:grid;grid-template-columns:340px 1fr;width:min(1100px,92vw);height:min(640px,86vh);
     background:#f5ead8;border:1.5px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);overflow:hidden;
@@ -1086,10 +1090,17 @@ function saveUsername(){
 
 // Turns the player's own real crafting grid into the payload a friend's
 // "visit" fetches (see StationEndpoints.MaxSnapshotJsonLength on the
-// backend — this stays well under that). Deliberately just the stations/
-// craftings shape, not the whole save: a friend visiting shouldn't see
-// gold/gems/inventory, only what's actually cooking, same spirit as only
-// being able to hammer a station, never open someone else's shop.
+// backend — a fully-populated 4x4 table stays well under that limit even
+// with the grid/cells/distinct fields below). Deliberately just the
+// stations/craftings shape, not the whole save: a friend visiting
+// shouldn't see gold/gems/inventory, only what's actually on the
+// workbench, same spirit as only being able to hammer a station, never
+// open someone else's shop.
+//
+// Carries enough (tier/grid/cells/distinct/duration) for
+// renderFriendStationGrid() to draw the ACTUAL grid — same background art,
+// same ingot icons, same cooking/ready overlay layout as the player's own
+// Workshop tab — rather than a plain text summary.
 function buildStationSnapshotPayload(){
   // Real stationIdx from the UNFILTERED array, not the filtered result's
   // own index — hammerFriendCraft()'s POST later sends this same index
@@ -1101,10 +1112,15 @@ function buildStationSnapshotPayload(){
     if(!st.unlocked) return;
     stations.push({
       stationIdx,
+      tier: st.tier,
+      grid: st.grid,
       craftings: st.craftings.map(c=>({
         craftId: c.id,
         ready: c.ready,
         remainMs: Math.max(0, c.startAt+c.duration-Date.now()),
+        duration: c.duration,
+        cells: c.cells,
+        distinct: c.distinct,
         hammersUsed: c.hammersUsed,
         smithHitBy: c.smithHitBy||[],
       })),
@@ -1133,16 +1149,23 @@ async function syncStationSnapshot(){
   }catch(e){ /* best-effort, see comment above */ }
 }
 
-// Drains this player's own pending-hits queue and actually applies each
-// one via the SAME hammerHit() the player's own clicks use — reusing its
-// existing multi-source smith-hit-cap mechanism (originally built for Jean
-// Clode, see hammerHit()'s smithHitBy branch) rather than inventing a
-// second code path for "someone else's hammer hit landed on my craft".
-// Every hit is re-validated against LIVE state before applying (station/
-// craft still exists, still ready) exactly like jeanClaudeHammerOnce()
-// rebuilds its candidate list fresh rather than trusting anything stale —
-// the sender's copy of this craft could easily be out of date by the time
-// this runs.
+// Drains this player's own pending-hits queue. Carries two payload
+// "type"s, sharing one queue rather than needing a second polling
+// endpoint for each new kind of notification:
+//   - 'hammerCraft': applied via the SAME hammerHit() the player's own
+//     clicks use — reusing its existing multi-source smith-hit-cap
+//     mechanism (originally built for Jean Clode, see hammerHit()'s
+//     smithHitBy branch). Re-validated against LIVE state before applying
+//     (station/craft still exists, still ready) exactly like
+//     jeanClaudeHammerOnce() rebuilds its candidate list fresh rather than
+//     trusting anything stale — the sender's copy of this craft could
+//     easily be out of date by the time this runs.
+//   - 'friendAccepted': queued by the backend's accept endpoint for the
+//     ORIGINAL SENDER of a friend request — see
+//     ForgeQuest-Backend/FriendRequestEndpoints. Adds the accepter to
+//     state.friends here, since this is the only place the sender ever
+//     finds out acceptance happened (no separate "did they accept yet?"
+//     polling endpoint exists).
 async function checkFriendPendingHits(){
   if(state.friendStatus!=='ready') return;
   let hits;
@@ -1154,10 +1177,17 @@ async function checkFriendPendingHits(){
   if(!hits || !hits.length) return;
   let applied = 0;
   const hitBy = new Set();
+  const newlyAccepted = [];
   hits.forEach(hit=>{
     let payload;
     try{ payload = JSON.parse(hit.payloadJson); }catch(e){ return; }
+
+    if(payload.type==='friendAccepted'){
+      if(!state.friends.some(f=>f.id===payload.playerId)) newlyAccepted.push(payload);
+      return;
+    }
     if(payload.type!=='hammerCraft') return;
+
     const st = state.stations[payload.stationIdx];
     const c = st && st.craftings.find(x=>x.id===payload.craftId);
     if(!c || !c.ready) return; // already collected/changed since it was queued — skip
@@ -1171,6 +1201,12 @@ async function checkFriendPendingHits(){
       hitBy.add(hit.fromDisplayName || 'A friend');
     }
   });
+
+  newlyAccepted.forEach(payload=>{
+    state.friends.push({id: payload.playerId, friendCode: null, displayName: payload.displayName||null});
+    setToast((payload.displayName||'A player')+' accepted your friend request!');
+  });
+
   if(applied>0){
     // A real popup, not just a toast — this is exactly the kind of thing a
     // toast can silently miss if it fires while the player's looking
@@ -1178,6 +1214,8 @@ async function checkFriendPendingHits(){
     // when the state is set" pattern, not tied to render()).
     state.friendHitPopup = {count: applied, names: Array.from(hitBy)};
     playHammerHitSfx();
+  }
+  if(applied>0 || newlyAccepted.length>0){
     saveGame();
     render();
   }
@@ -1193,9 +1231,10 @@ let friendBackendLoopStarted = false;
 function startFriendBackendLoop(){
   syncStationSnapshot();
   checkFriendPendingHits();
+  checkIncomingFriendRequests();
   if(friendBackendLoopStarted) return; // registerOrLoadFriendIdentity can reach here at most once per boot anyway, but don't stack a second interval if something ever changes that
   friendBackendLoopStarted = true;
-  setInterval(()=>{ syncStationSnapshot(); checkFriendPendingHits(); }, FRIEND_SYNC_INTERVAL_MS);
+  setInterval(()=>{ syncStationSnapshot(); checkFriendPendingHits(); checkIncomingFriendRequests(); }, FRIEND_SYNC_INTERVAL_MS);
 }
 
 const state = {
@@ -1230,6 +1269,11 @@ const state = {
   // as friendCode/friendPlayerId above.
   username:null,
   usernamePromptOpen:false,
+  // This install's own INCOMING friend requests — see
+  // checkIncomingFriendRequests(). Not persisted, always re-fetched (same
+  // reasoning as everything else backed by the friends server, e.g.
+  // visitingFriendData).
+  incomingFriendRequests:[],
   hammerInventoryOpen:false,
   swordInventoryModalOpen:false,
   achievementsOpen:false,
@@ -2484,12 +2528,19 @@ function tickJeanClaude(){
 // or {displayName, businessLevel, stations} — never throws.
 async function fetchFriendSnapshot(playerId){
   try{
+    // Authenticated now (the backend gates this on an accepted Friendship,
+    // see ForgeQuest-Backend's README "friendship gate") — a 403 here means
+    // local state thinks you're friends but the server doesn't, which
+    // should only ever happen from a stale cache, not normal use.
     // no-store: every caller here wants "what's actually true right now",
     // never a cached response — see the tick loop's own comment for why
     // craft state can go stale fast and a re-check expects that to mean
     // something.
-    const resp = await fetch(FRIENDS_API_BASE+'/api/stations/'+encodeURIComponent(playerId), {cache:'no-store'});
+    const resp = await fetch(FRIENDS_API_BASE+'/api/stations/'+encodeURIComponent(playerId), {
+      cache:'no-store', headers: friendAuthHeaders(),
+    });
     if(resp.status===404) return {notSynced:true};
+    if(resp.status===403) return {notFriends:true};
     if(!resp.ok) return {error:true};
     const raw = await resp.json();
     // raw.snapshotJson is a STRING (the DB column) — the actual stations/
@@ -2505,35 +2556,54 @@ async function fetchFriendSnapshot(playerId){
 // set (see saveUsername()), so this only ever fills in/updates toward the
 // truth, never overwrites something real with something older.
 function applyFriendSnapshotToEntry(friend, snapshot){
-  if(!friend || !snapshot || snapshot.notSynced || snapshot.error) return;
+  if(!friend || !snapshot || snapshot.notSynced || snapshot.notFriends || snapshot.error) return;
   if(snapshot.displayName) friend.displayName = snapshot.displayName;
   friend.businessLevel = snapshot.businessLevel;
   friend.stations = snapshot.stations;
 }
 
+// Sends a real friend REQUEST, not an immediate add — the target has to
+// accept (see acceptFriendRequest()) before either side can view the
+// other's station or send hits (enforced server-side, see the backend
+// README's "friendship gate", not just a client-side nicety). Nothing gets
+// pushed into state.friends here except on the two paths that mean a
+// friendship already exists the instant this call returns.
 async function addFriendByCode(){
   const input = document.getElementById('friendCodeInput');
   const code = (input.value||'').trim().toUpperCase();
   if(!code) return;
   if(state.friendCode && code===state.friendCode){ setToast("That's your own friend code."); return; }
-  if(state.friends.some(f=>f.friendCode===code)){ setToast('Already on your friends list.'); render(); return; }
   input.disabled = true;
   try{
-    const resp = await fetch(FRIENDS_API_BASE+'/api/players/by-code/'+encodeURIComponent(code));
-    if(!resp.ok){
-      setToast(resp.status===404 ? 'No player found with that code.' : "Couldn't reach the friends server — try again in a moment.");
+    const lookup = await fetch(FRIENDS_API_BASE+'/api/players/by-code/'+encodeURIComponent(code));
+    if(!lookup.ok){
+      setToast(lookup.status===404 ? 'No player found with that code.' : "Couldn't reach the friends server — try again in a moment.");
       return;
     }
-    const data = await resp.json();
-    const friend = {id:data.playerId, friendCode:data.friendCode, displayName:null};
-    // Grab their current name/board (if they've synced already) right
-    // away, same as refreshFriendsRoster() would the next time this list
-    // is opened — no reason to make the player wait for that.
-    applyFriendSnapshotToEntry(friend, await fetchFriendSnapshot(data.playerId));
-    state.friends.push(friend);
+    const target = await lookup.json();
+    if(state.friends.some(f=>f.id===target.playerId)){ setToast('Already on your friends list.'); return; }
+
+    const resp = await fetch(FRIENDS_API_BASE+'/api/friends/requests/'+encodeURIComponent(target.playerId), {
+      method:'POST', headers: friendAuthHeaders(),
+    });
+    if(!resp.ok){ setToast("Couldn't reach the friends server — try again in a moment."); return; }
+    const result = await resp.json();
+
+    if(result.pending){
+      setToast('Friend request sent to '+target.friendCode+' — waiting for them to accept!');
+    } else {
+      // alreadyFriends or instantFriend (they'd already requested you) —
+      // either way a real Friendship exists right now, so add them for
+      // real instead of leaving the roster out of sync with the server.
+      const friend = {id:target.playerId, friendCode:target.friendCode, displayName:null};
+      applyFriendSnapshotToEntry(friend, await fetchFriendSnapshot(target.playerId));
+      state.friends.push(friend);
+      saveGame();
+      setToast(result.instantFriend
+        ? (friend.displayName||friend.friendCode)+' had already sent you a request — you\'re friends now!'
+        : 'Added '+(friend.displayName||friend.friendCode)+' as a friend!');
+    }
     input.value='';
-    saveGame();
-    setToast('Added '+(friend.displayName||friend.friendCode)+' as a friend!');
     render();
   }catch(e){
     setToast("Couldn't reach the friends server — try again in a moment.");
@@ -2544,6 +2614,52 @@ async function addFriendByCode(){
 function removeFriend(id){
   state.friends = state.friends.filter(f=>f.id!==id);
   saveGame();
+  render();
+}
+
+// Polled alongside the station sync/pending-hits loop (see
+// startFriendBackendLoop()) — populates the badge on the Friends nav
+// button (renderNav()) and the Accept/Decline list in the sidebar
+// (renderFriendSidebar()). Not persisted: always recomputed from the
+// server, same reasoning as everything else friends-related.
+async function checkIncomingFriendRequests(){
+  if(state.friendStatus!=='ready') return;
+  try{
+    const resp = await fetch(FRIENDS_API_BASE+'/api/friends/requests', { headers: friendAuthHeaders() });
+    if(!resp.ok) return;
+    state.incomingFriendRequests = await resp.json();
+    render();
+  }catch(e){ /* best-effort, same as every other background friends call */ }
+}
+
+async function acceptFriendRequest(fromPlayerId){
+  try{
+    const resp = await fetch(FRIENDS_API_BASE+'/api/friends/requests/'+encodeURIComponent(fromPlayerId)+'/accept', {
+      method:'POST', headers: friendAuthHeaders(),
+    });
+    if(!resp.ok){ setToast("Couldn't reach the friends server — try again in a moment."); return; }
+  }catch(e){ setToast("Couldn't reach the friends server — try again in a moment."); return; }
+
+  const req = state.incomingFriendRequests.find(r=>r.fromPlayerId===fromPlayerId);
+  state.incomingFriendRequests = state.incomingFriendRequests.filter(r=>r.fromPlayerId!==fromPlayerId);
+  const friend = {id:fromPlayerId, friendCode:null, displayName: req?.fromDisplayName||null};
+  // Now allowed, since the Friendship row exists as of the accept call
+  // above — grabs their real board state right away instead of waiting
+  // for the next roster refresh.
+  applyFriendSnapshotToEntry(friend, await fetchFriendSnapshot(fromPlayerId));
+  state.friends.push(friend);
+  saveGame();
+  setToast((friend.displayName||'They')+' are now your friend!');
+  render();
+}
+
+async function declineFriendRequest(fromPlayerId){
+  try{
+    await fetch(FRIENDS_API_BASE+'/api/friends/requests/'+encodeURIComponent(fromPlayerId), {
+      method:'DELETE', headers: friendAuthHeaders(),
+    });
+  }catch(e){ /* best-effort — worst case it reappears next poll, harmless */ }
+  state.incomingFriendRequests = state.incomingFriendRequests.filter(r=>r.fromPlayerId!==fromPlayerId);
   render();
 }
 // Refreshes every real friend's cached name/board state in one pass —
@@ -3620,45 +3736,104 @@ function renderFriendVisitModal(){
   }
   const stations = data.stations||[];
   const sentHits = loadSentFriendHits();
-  const stationRows = stations.length ? stations.map(st=>{
-    if(!st.craftings.length){
-      return `<div class="visitStation"><div>Station ${st.stationIdx+1}</div><div class="small">Nothing cooking.</div></div>`;
-    }
-    return st.craftings.map(c=>{
-      if(!c.ready){
-        const remainS = Math.ceil(c.remainMs/1000);
-        return `<div class="visitStation"><div>Station ${st.stationIdx+1}</div><div class="small">Forging &mdash; ${remainS}s remaining (as of their last sync)</div></div>`;
-      }
-      // Smith is excluded once *you* (this visitor's own real playerId)
-      // have hit this craft, not once it's been hit at all — same "once
-      // per source" rule hammerHit() uses for the player's own crafts, so
-      // a second friend visiting wouldn't find themselves already locked
-      // out just because you went first. Also excluded once sentHits says
-      // you've already sent this exact hit — the fetched snapshot alone
-      // can't tell you that (see loadSentFriendHits()'s doc comment), so a
-      // Refresh (or a leave/revisit) can't be used to re-hit the same
-      // craft over and over.
-      const options = POST_COOK_HAMMERS.filter(h=>{
-        if(sentHits.has(sentHitKey(friend.id, c.craftId, h.id))) return false;
-        if(h.id==='smith') return !(c.smithHitBy||[]).includes(state.friendPlayerId);
-        return !c.hammersUsed.includes(h.id);
-      }).filter(h=>hammerCanUse(h.id));
-      const hitButtons = options.length
-        ? options.map(h=>`<button onclick="hammerFriendCraft('${friend.id}',${st.stationIdx},'${c.craftId}','${h.id}')">${h.name}${h.id==='smith'?'':' ('+state.hammerInventory[h.id]+')'}</button>`).join('')
-        : `<button disabled>No more hammers available</button>`;
-      return `<div class="visitStation ready">
-        <div>
-          <div>Station ${st.stationIdx+1} &middot; ready to collect</div>
-          <div class="small">Each hammer type only strikes once (smith: once per visitor)</div>
-        </div>
-        <div class="row" style="gap:6px;">${hitButtons}</div>
-      </div>`;
-    }).join('');
-  }).join('') : `<div class="small">Nothing on their workbench yet.</div>`;
+  const stationCards = stations.length
+    ? stations.map(st=>renderFriendStationCard(friend, st, sentHits)).join('')
+    : `<div class="small">Nothing on their workbench yet.</div>`;
   return `<div class="modalBackdrop" onclick="leaveVisit()"><div class="friendVisitModal" onclick="event.stopPropagation()">${header}
     <div class="small" style="margin:10px 0;">Business level ${data.businessLevel}. Give a ready station a hammer hit using one of your own hammers to help &mdash; you'll get a small thank-you reward.</div>
-    ${stationRows}
+    ${stationCards}
   </div></div>`;
+}
+
+// Read-only visual twin of renderStation()/renderStationGrid() — same
+// background art (CRAFT_TABLE_BG), same ingot icons, same cooking/ready
+// overlay layout, so a friend's table actually looks like a crafting
+// table instead of a plain text summary. What's deliberately missing: no
+// cellClick/Fire buttons (a visitor can't place ore or start a craft on
+// someone else's table), no glass/fire while-cooking buttons or Collect
+// (those are self-only privileges, never extended to a friend's crafts),
+// and the cooking progress bar is computed from the snapshot's `duration`/
+// `remainMs` rather than live elapsed time — a static read of "as of their
+// last sync", same caveat as everywhere else in this file that reads
+// visitingFriendData.
+function renderFriendStationGrid(friend, st, sentHits){
+  const [rows, cols] = GRID_TIERS[st.tier];
+  const cooking = st.craftings.filter(c=>!c.ready);
+  const ready = st.craftings.filter(c=>c.ready);
+  const occupiedKeys = new Set();
+  cooking.concat(ready).forEach(c=>c.cells.forEach(p=>occupiedKeys.add(p.r+','+p.c)));
+
+  const cells = [];
+  for(let r=0;r<rows;r++){
+    for(let c=0;c<cols;c++){
+      if(occupiedKeys.has(r+','+c)) continue;
+      const val = st.grid[r][c];
+      cells.push(`<div class="gridCell ${val?'filled':'empty'}" style="grid-row:${r+1};grid-column:${c+1};">${val? `<img src="${INGOT_ICON[val]}" alt="${matById(val).name}">` : ''}</div>`);
+    }
+  }
+
+  const spanOf = c=>{
+    const minR = Math.min(c.cells[0].r,c.cells[1].r), maxR = Math.max(c.cells[0].r,c.cells[1].r);
+    const minC = Math.min(c.cells[0].c,c.cells[1].c), maxC = Math.max(c.cells[0].c,c.cells[1].c);
+    return `grid-row:${minR+1} / ${maxR+2};grid-column:${minC+1} / ${maxC+2};`;
+  };
+
+  const cookingHtml = cooking.map(c=>{
+    const pct = Math.max(0, Math.min(100, Math.round((c.duration-c.remainMs)/c.duration*100)));
+    const remain = Math.ceil(c.remainMs/1000);
+    const label = (c.distinct||[]).map(id=>matById(id).name).join(' + ');
+    const cellDivs = c.cells.map(p=>`<div class="gridCell cooking" style="grid-row:${p.r+1};grid-column:${p.c+1};"></div>`).join('');
+    return `<div style="display:contents;">
+      ${cellDivs}
+      <div class="cookProgress" style="${spanOf(c)}">
+        <div class="cookContent">
+          <span class="small cookLabel" style="text-align:center;">Forging ${label}&hellip; ${remain}s (as of their last sync)</span>
+          <div class="progresswrap"><div class="progressfill" style="width:${pct}%;"></div></div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  const readyHtml = ready.map(c=>{
+    const cellDivs = c.cells.map(p=>`<div class="gridCell ready-craft" style="grid-row:${p.r+1};grid-column:${p.c+1};"></div>`).join('');
+    // Same double guard as before: excluded once already used on their end
+    // (smithHitBy/hammersUsed from the snapshot) OR once sentHits says this
+    // visitor already sent this exact hit (see loadSentFriendHits()'s doc
+    // comment for why the snapshot alone can't be trusted for that).
+    const options = POST_COOK_HAMMERS.filter(h=>{
+      if(sentHits.has(sentHitKey(friend.id, c.craftId, h.id))) return false;
+      if(h.id==='smith') return !(c.smithHitBy||[]).includes(state.friendPlayerId);
+      return !c.hammersUsed.includes(h.id);
+    }).filter(h=>hammerCanUse(h.id));
+    const hitButtons = options.length
+      ? options.map(h=>`<button onclick="hammerFriendCraft('${friend.id}',${st.stationIdx},'${c.craftId}','${h.id}')">${h.name}${h.id==='smith'?'':' ('+state.hammerInventory[h.id]+')'}</button>`).join('')
+      : `<button disabled>No hammers left</button>`;
+    return `<div style="display:contents;">
+      ${cellDivs}
+      <div class="readyActions" style="${spanOf(c)}">
+        <span class="small" style="text-align:center;">Ready &mdash; give it a hammer hit</span>
+        <div class="row" style="gap:4px;flex-wrap:wrap;justify-content:center;">${hitButtons}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  const tableBg = CRAFT_TABLE_BG[st.tier];
+  return `<div class="craftGridWrap" style="grid-template-columns:repeat(${cols},1fr);grid-template-rows:repeat(${rows},1fr);background-image:url('${tableBg}');">
+    ${cells.join('')}
+    ${cookingHtml}
+    ${readyHtml}
+  </div>`;
+}
+
+function renderFriendStationCard(friend, st, sentHits){
+  const [rows, cols] = GRID_TIERS[st.tier];
+  const cooking = st.craftings.filter(c=>!c.ready).length;
+  const ready = st.craftings.filter(c=>c.ready).length;
+  const statusNote = (cooking||ready) ? ` &middot; ${[cooking? cooking+' forging':'', ready? ready+' ready':''].filter(Boolean).join(', ')}` : ' &middot; nothing cooking';
+  return `<div class="station friendStationCard">
+    <div class="title">Table ${st.stationIdx+1} &middot; ${rows}&times;${cols}${statusNote}</div>
+    ${renderFriendStationGrid(friend, st, sentHits)}
+  </div>`;
 }
 
 // The roster only — visiting a specific friend is its own popout modal now
@@ -4113,16 +4288,24 @@ function renderNav(){
     // instead of opening the modal when clicked too early.
     {id:'expeditions', kind:'modal', fn:'toggleExpeditionsOverview', flag:'expeditionsOpen'},
   ];
+  // Only 'friends' has anything to badge right now — a count of pending
+  // INCOMING requests (see checkIncomingFriendRequests()), not outgoing
+  // ones, since those need no action from this player.
+  const navBadges = { friends: (state.incomingFriendRequests||[]).length };
   const buttons = items.map(it=>{
     const active = it.kind==='tab' ? state.tab===it.id : state[it.flag];
     const action = it.kind==='tab' ? `setTab('${it.id}')` : `${it.fn}()`;
+    const badgeCount = navBadges[it.id]||0;
+    const badgeHtml = badgeCount>0
+      ? `<span class="badge" style="position:absolute;top:-6px;right:-6px;background:#a33;color:#fdf6ec;border-color:#a33;">${badgeCount}</span>`
+      : '';
     if(NAV_BG_IMAGES[it.id]){
-      return `<div class="navItem navIconArt ${active?'active':''}" style="background-image:url('${NAV_BG_IMAGES[it.id]}');" title="${NAV_LABELS[it.id]}" onclick="${action}"></div>`;
+      return `<div class="navItem navIconArt ${active?'active':''}" style="background-image:url('${NAV_BG_IMAGES[it.id]}');position:relative;" title="${NAV_LABELS[it.id]}" onclick="${action}">${badgeHtml}</div>`;
     }
     const icon = NAV_ICONS[it.id]
       ? `<img src="${NAV_ICONS[it.id]}" alt="${NAV_LABELS[it.id]}">`
       : `<span class="navIconGlyph" title="${NAV_LABELS[it.id]}">🧭</span>`;
-    return `<div class="navItem ${active?'active':''}" onclick="${action}">${icon}</div>`;
+    return `<div class="navItem ${active?'active':''}" style="position:relative;" onclick="${action}">${icon}${badgeHtml}</div>`;
   }).join('');
   // The hammer-inventory button used to live here (nav rail) but has moved
   // onto the crafting grid panel itself — see renderWorkshop()'s hammerBtn.
@@ -4189,9 +4372,24 @@ function renderShopSidebar(){
 }
 
 function renderFriendSidebar(){
-  return `<div class="panel">
+  const requests = state.incomingFriendRequests||[];
+  const requestsPanel = requests.length ? `<div class="panel" style="margin-bottom:14px;">
+    <div class="section-title">Friend requests (${requests.length})</div>
+    ${requests.map(r=>`
+      <div class="friendCard">
+        <div class="friendInfo">
+          <div class="avatar">${initials(r.fromDisplayName)}</div>
+          <div><b>${r.fromDisplayName}</b><div class="small">Wants to be your friend</div></div>
+        </div>
+        <div class="row" style="gap:6px;">
+          <button class="primary" onclick="acceptFriendRequest('${r.fromPlayerId}')">Accept</button>
+          <button onclick="declineFriendRequest('${r.fromPlayerId}')">Decline</button>
+        </div>
+      </div>`).join('')}
+  </div>` : '';
+  return `${requestsPanel}<div class="panel">
     <div class="section-title">Add a friend</div>
-    <div class="small" style="margin-bottom:8px;">Enter a friend's code to add them &mdash; find your own in Settings.</div>
+    <div class="small" style="margin-bottom:8px;">Enter a friend's code to send them a request &mdash; find your own in Settings. They'll need to accept before you can see their workshop.</div>
     <div class="row">
       <input id="friendCodeInput" type="text" placeholder="FQ-XXXXXX" style="flex:1;min-width:120px;background:rgba(32,30,29,.04);color:var(--text);border:1.5px solid var(--border);border-radius:999px;padding:8px 14px;font-size:12px;text-transform:uppercase;">
       <button class="primary" onclick="addFriendByCode()">Add</button>
@@ -4290,6 +4488,8 @@ window.fulfillOrder = fulfillOrder;
 window.skipOrder = skipOrder;
 window.addFriendByCode = addFriendByCode;
 window.saveUsername = saveUsername;
+window.acceptFriendRequest = acceptFriendRequest;
+window.declineFriendRequest = declineFriendRequest;
 window.dismissFriendHitPopup = dismissFriendHitPopup;
 window.removeFriend = removeFriend;
 window.visitFriend = visitFriend;
