@@ -1782,6 +1782,12 @@ const state = {
   // not persisted, same as every other modal-open flag on this list.
   profileOpen:false,
   settingsResetConfirm:false,
+  // Same "ask once, inline, no separate modal" pattern as settingsResetConfirm
+  // above — the id of the sword currently showing a scrap confirmation row
+  // instead of its normal Scrap button (see renderSwordRow()), or null. Not
+  // persisted, like every other confirm/modal-open flag here: a reload just
+  // means you'd have to click Scrap again, not lose anything.
+  scrapConfirmId:null,
   // Set to the just-collected sword object the moment it's a genuinely new
   // discovery (see completeCraft()) — not persisted, same as every other
   // modal-open flag, so a mid-celebration reload just drops the popup rather
@@ -3844,13 +3850,30 @@ function fusionScrapValue(materialId, rank){
   const base = matById(aId).cost + matById(bId).cost;
   return Math.round(base * (1+(FUSION_RANK_BONUS[rank]||0)) * 0.25);
 }
-function scrapSword(id){
-  const s = state.inventory.find(x=>x.id===id);
-  if(!s) return;
+// Shared by scrapSword() (the actual payout) and renderSwordRow()'s confirm
+// row (showing the payout BEFORE committing) — one formula, so the number
+// shown in the confirmation can never drift from the number actually paid.
+function scrapValueFor(s){
   let refund;
   if(s.fusion) refund = fusionScrapValue(s.materialId, s.rank);
   else refund = Math.round(matById(s.materialId).cost*RANK_MULT[s.rank]*0.25);
   if(s.saleBonus) refund = Math.round(refund*1.2);
+  return refund;
+}
+// First click on a Scrap button — same inline "ask once" pattern as
+// requestResetGameProfile(), just per-row instead of one global flag, since
+// there can be several swords in the list at once. Only ever one row's
+// confirm state is shown at a time: requesting a different sword while one
+// is already pending just moves the confirmation, it doesn't stack them.
+function requestScrapSword(id){ state.scrapConfirmId = id; render(); }
+function cancelScrapSword(){ state.scrapConfirmId = null; render(); }
+// The actual, irreversible action — only ever called from the confirm
+// button now (see renderSwordRow()), never directly from the first click.
+function scrapSword(id){
+  const s = state.inventory.find(x=>x.id===id);
+  state.scrapConfirmId = null; // clear regardless of whether s was still found
+  if(!s) return;
+  const refund = scrapValueFor(s);
   state.gold += refund;
   state.inventory = state.inventory.filter(x=>x.id!==id);
   setToast('Scrapped '+s.name+' for '+refund.toLocaleString()+' gold.');
@@ -5418,10 +5441,17 @@ function renderNav(){
 }
 
 function renderSwordRow(s){
+  const confirming = state.scrapConfirmId===s.id;
   return `<div class="invRow">
       <div class="rank${s.rank}" style="font-weight:600;font-size:12.5px;">${s.name}${s.saleBonus?' <span class="badge" style="border-color:var(--gold);color:var(--gold);">+sale</span>':''}</div>
       <div class="small">${s.material} &middot; <span class="badge">${s.rank}</span> &middot; AP ${s.ap} / DP ${s.dp}${s.el?' &middot; '+s.el:''}</div>
-      <button onclick="scrapSword('${s.id}')">Scrap</button>
+      ${confirming ? `
+      <div class="small" style="color:#a33;">Scrap for ${scrapValueFor(s).toLocaleString()}g? This can't be undone.</div>
+      <div class="row" style="gap:6px;">
+        <button onclick="cancelScrapSword()">Cancel</button>
+        <button style="background:#a33;color:#fff;border-color:#a33;" onclick="scrapSword('${s.id}')">Confirm scrap</button>
+      </div>
+      ` : `<button onclick="requestScrapSword('${s.id}')">Scrap</button>`}
     </div>`;
 }
 // Capped so this sidebar panel can never grow the page or need a scrollbar —
