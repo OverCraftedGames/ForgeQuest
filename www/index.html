@@ -335,6 +335,7 @@
   .catalogGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:10px;}
   .catalogItem{background:rgba(245,234,216,.6);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:9px;font-size:11px;}
   .catalogItem.locked{opacity:.42;}
+  .catalogLore{font-style:italic;opacity:.75;margin-top:3px;}
   .matBlock{margin-bottom:16px;}
   .matHeader{font:400 16px/1.1 var(--font-heading);color:var(--text);margin-bottom:6px;}
   .shopRow{
@@ -372,7 +373,10 @@
   }
   .newSwordArtPanel img{width:150px;height:150px;object-fit:contain;filter:drop-shadow(0 6px 10px rgba(32,30,29,.25));}
   .newSwordName{font:400 24px/1.15 var(--font-heading);color:var(--text);margin:0 0 6px;}
-  .newSwordMeta{color:var(--muted);font-size:12px;margin-bottom:18px;}
+  .newSwordMeta{color:var(--muted);font-size:12px;margin-bottom:12px;}
+  /* Sword lore (see SWORD_LORE) — shown here on first discovery and again in
+     the Catalog (renderCatalogDetail()'s .catalogLore) any time after. */
+  .newSwordLore{font:italic 400 13px/1.4 var(--font-body);color:var(--text);opacity:.7;margin:0 0 18px;}
   /* The daily-login popup's 7-day readout, reusing newSwordModalCard's shell
      (see renderDailyRewardPopup). Not clickable — only "today" is ever
      claimable, past/future days are pure status. */
@@ -841,6 +845,110 @@ const SWORD_SPRITE = {
   'Platinum Moonlight':'swords/fusion/19_Platinum_Moonlight.png', 'Steelbound Platinum':'swords/fusion/20_Steelbound_Platinum.png',
   'Steel Moonlight':'swords/fusion/21_Steel_Moonlight.png',
 };
+// One line of flavor text per sword, keyed by exact name (same key SWORD_SPRITE
+// above already uses, and for the same reason — a name is guaranteed unique
+// across the whole game, catalog discovery included). A writing-only addition,
+// not a mechanical one: shown in the Catalog (renderCatalogDetail()) once a
+// sword's actually been discovered, and in the discovery popup itself
+// (renderNewSwordPopup()) at the moment it's first collected. loreFor()
+// below falls back to '' for any name missing an entry (same defensive
+// pattern as SWORD_SPRITE_FALLBACK) so a future sword added without lore
+// yet just renders with no lore line instead of breaking.
+const SWORD_LORE = {
+  'Copper Sword':"Your very first blade. Rough, a little dull, but it's yours.",
+  'The Fang':"Curved like a beast's tooth — meant to look fiercer than it fights.",
+  'Crimson Sword':'The copper never quite loses that reddish gleam, blood or no blood.',
+  'Sawblade':'Someone in the workshop swears this was originally meant for lumber.',
+  'Ancient Sword':"Copper doesn't rust like this on its own. Someone aged it on purpose.",
+  'Predator':'Balanced for a quick first strike and not much else.',
+  'Ceremonial Blade':'Too pretty to use, too sharp to just display. A workshop compromise.',
+  'Prehistoric Vow':'The etchings along the blade are older than copperworking itself, or so the seller claimed.',
+  'Survival of the Fittest':"Ugly, dented, and somehow still standing after everything that's been thrown at it.",
+  'Temple Key':'Shaped less like a sword and more like something meant to unlock a door no one remembers.',
+
+  'Bronze Sword':'A real step up from copper — heavier, and it actually holds an edge.',
+  'Xiphos':'Short, leaf-bladed, and built for a thrust rather than a swing.',
+  'Bonecrusher':'Not subtle. Not meant to be.',
+  'Gladius':'Compact enough for close work, borrowed from a much older tradition.',
+  'Mageblade':"The bronze hums faintly when arcane energy is nearby. Nobody's figured out why.",
+  'Duelist Sword':"Light in the hand, made for someone who'd rather outmaneuver than overpower.",
+  'Runeblade':'The runes were carved by hand, one at a time, by someone with more patience than the smith.',
+  'Manafury':'Holds more arcane charge than bronze has any right to.',
+  'Conqueror':'Heavy, deliberate, and built to be the last word in an argument.',
+  'Demon Stone Infused Blade':"Whatever's fused into this blade, it wasn't found lying around.",
+
+  'Iron Sword':'Workmanlike and reliable — the backbone of every real armory.',
+  'Vampiric Sword':'Drinks a little more than it should. Best not to ask what.',
+  'Skeleton Sword':'Etched with a rib-cage pattern nobody in the shop remembers requesting.',
+  'Elite Sword':"Standard issue for someone who's stopped being a beginner.",
+  'Moonblade':'The iron takes on a pale sheen under moonlight, real or imagined.',
+  'Defender':'Built heavier at the guard than the tip — this is a sword for standing your ground.',
+  'Barbarian Sword':'Unrefined on purpose. Some buyers specifically ask for it that way.',
+  'Silvermoon':"The wind seems to follow this blade through a swing, not just cut it.",
+  'Aegis':"More plate than edge — a sword built by someone who'd rather block than strike.",
+  'Northern Wind':'Cold to the touch no matter how long it sits by the forge.',
+
+  'Steel Sword':'Cleaner lines, better balance. Steel spoils you fast.',
+  'Executioner Sword':'Wide, heavy, and built for a single decisive stroke.',
+  'Marshal Sabre':"Curved for a rider's swing, though most buyers never mount a horse.",
+  'Falcon Sword':'Light and quick — the wind element barely needed coaxing into this one.',
+  'Paladin Sword':'Straight, plain, and exactly as honest as it looks.',
+  'Warlord Sword':"Big enough that most people need both hands, whether they admit it or not.",
+  'Shade':"The wind clings to this blade's edge like it's trying to hide the strike.",
+  'Nightingale':"Sings faintly when swung fast enough. Nobody's sure if that's the wind element or the metal.",
+  'Durendal':'Named after a legend the smith clearly hopes to live up to.',
+  'Dominion, The Sun Wheel':'The fire etching along the flat catches every torch in the room.',
+
+  'Tarnished Silver Blade':'The tarnish is real, not aesthetic. Silver ore does this on its own.',
+  'Silver Sword':'Polished bright and priced accordingly.',
+  'Silver Bell':'A faint chime rings out on impact. Holy magic, or just good metalwork.',
+  'Silver Star':'The crossguard is shaped like a five-point star, sharpened at every point out of spite.',
+  'Holy Cross':'Blessed, allegedly, though the paperwork on that is thin.',
+  'Silver Warden':'Broad enough to guard a doorway on its own.',
+  'Exorcist':"Reportedly effective on things that shouldn't be here. Effectiveness on paying customers is standard.",
+  'Scarlet Crusader':'Silver polished to a mirror shine, with a red-dyed grip that never quite fades.',
+
+  'Rough-Cut Gold Blade':"Gold is soft for a blade — this one's more proof of skill than proof of edge.",
+  'Gilt Practice Blade':'Too valuable to actually spar with, which somewhat defeats the point.',
+  'Gold Sword':'Heavier than it looks, and it looks plenty heavy already.',
+  'Midas Edge':'Everyone asks if it turns things to gold on contact. It does not.',
+  'Ka-Ching':'The smith named this one. The smith is not sorry.',
+  'Aurum Fang':'Curved, gleaming, and clearly built to be looked at as much as used.',
+  'The Gold Cannon':'Wide as a shovel and priced like one too, if the shovel were solid gold.',
+  'King’s Ransom':'Worth exactly what the name suggests, give or take a kingdom.',
+
+  'Unpolished Platinum Blade':"Even unfinished, platinum shrugs off scratches other metals wouldn't survive.",
+  'Raw Platinum Blade':'Straight off the ingot, and already better balanced than most finished blades.',
+  'Platinum Rapier':'Thin, precise, and entirely too expensive to actually duel with.',
+  'Platinum Saber':'Curved for a cavalry charge this workshop will never see.',
+  'Argent Vanguard':'Built to lead a charge, or at least to look like it could.',
+  'Platinum Bulwark':'As much wall as weapon.',
+  'Radiant Sovereign':'The light element makes this blade genuinely hard to look directly at mid-swing.',
+  'Platinum Ascendant':'Cold as the frost bound into it, and twice as unyielding.',
+
+  'Twincast Blade':'Two castings, one blade — nobody expected copper and bronze to bond this cleanly.',
+  'Gilded Bronze':'A bronze core wrapped in real gold leaf. Purely decorative, the smith insists, then charges accordingly.',
+  'Bronzefang':"Iron's strength with bronze's bite — the fusion that convinced the workshop this was worth pursuing.",
+  'Platinum-Bound Bronze':"The platinum binding shouldn't hold against bronze's softer core. It does, and nobody's sure why.",
+  'Silver Verdigris':"Bronze's green patina and silver's shine fight for the same surface, and somehow both win.",
+  'Warforged Bronze':"Steel's discipline forced into bronze's older, rougher shape.",
+  'Coinsworth':'Looks like a coin got delusions of grandeur and grew into a sword.',
+  'Iron Vein Cutter':'Copper veins run visibly through the iron, like the ore never fully let go.',
+  'Platinum Vein Cutter':'The same vein pattern as its iron cousin, in a metal that costs considerably more to waste.',
+  'Silvercoin Edge':"Half practical tool, half something you'd mint. It's a genuinely strange combination.",
+  'Steelbound Copper':"Copper's softness held rigid by a steel spine — shouldn't work, does.",
+  'Goldrust':'Rust and gold have no business looking this good together, but here we are.',
+  'Platinum Crown':'Reads less like a sword and more like a crown that got the wrong instructions.',
+  'Sun and Moon':"The one fusion recipe that's actually old — a real fusion legend, not a workshop invention.",
+  'Sunsteel':"Gold's warmth fused into steel's discipline. Warriors and jewelers both keep asking after it.",
+  'Ironbound Platinum':"Platinum's shine, kept honest by iron's blunt practicality.",
+  'Silvered Iron':'Iron does the work, silver takes the credit. That’s the arrangement, anyway.',
+  'Ironclad Vanguard':"Two of the workshop's most reliable metals, fused into something more reliable than either alone.",
+  'Platinum Moonlight':'Two pale metals, one blade, and a shine that’s hard to look away from.',
+  'Steelbound Platinum':"Platinum's rarity given steel's actual spine to stand on.",
+  'Steel Moonlight':"Silver's glow softened by steel's straight lines — quietly one of the workshop's best-looking fusions.",
+};
+function loreFor(swordName){ return SWORD_LORE[swordName] || ''; }
 // Nameplate-free variants of the exact same 85 sprites (www/swords_notitle/),
 // used for the small crafting-in-progress preview where a big text banner
 // doesn't read well at that size. Derived from SWORD_SPRITE by a fixed
@@ -1089,6 +1197,57 @@ const SMITH_HAMMER_CRIT_BONUS = 0.12;
 /* Chance a non-magic hammer hit raises quality a tier on its own (on top of the crit
    chance above); the magic hammer's tier-up is guaranteed instead of chance-based. */
 const HAMMER_QUALITY_CHANCE = 0.3;
+
+/* ---------- PER-MATERIAL EXPERTISE (v1: hammer-hit crit bonus only) ----------
+   A second, sim-flavored progression axis alongside business level — tracked
+   per material (state.materialExpertise), not one global number, and gained
+   just by actually crafting with a material (see completeCraft()'s
+   gainMaterialExpertise() call), not from orders/expeditions/rep at all.
+   v1 deliberately does ONE thing: a small hammer-hit crit-chance bonus for
+   the material(s) actually in the craft, so specializing in one material
+   makes hammering it noticeably more rewarding without touching craft
+   duration, sell price, or fusion-discovery odds. A craft-speed bonus was
+   discussed as a possible v2 but deliberately left out of this pass — two
+   behavioral changes landing at once makes it harder to tell which one is
+   responsible if the pacing ends up feeling off in real play. */
+// First-pass curve, not real playtesting — same "retune freely" spirit as
+// EXPEDITION_REP_DIVISOR. Gentle on purpose: this is meant to reward
+// long-term specialization, not level up in a handful of crafts the way
+// business level does.
+function materialExpertiseToNext(level){ return 5 + level*5; }
+function materialExpertiseLevel(matId){
+  let xp = state.materialExpertise[matId] || 0;
+  let level = 0;
+  while(xp >= materialExpertiseToNext(level)){ xp -= materialExpertiseToNext(level); level++; }
+  return level;
+}
+// How much of the way to the NEXT level the material currently is — for the
+// Catalog's progress bar (renderCatalogDetail()), same shape as the business
+// level bar (state.exp/expToNext()) elsewhere.
+function materialExpertiseProgress(matId){
+  let xp = state.materialExpertise[matId] || 0;
+  let level = 0;
+  while(xp >= materialExpertiseToNext(level)){ xp -= materialExpertiseToNext(level); level++; }
+  return {level, xp, toNext: materialExpertiseToNext(level)};
+}
+const MATERIAL_EXPERTISE_CRIT_PER_LEVEL = 0.01;
+// Capped well under 1 -- a fully mastered material is a meaningful edge on
+// top of HAMMER_HIT_CRIT_CHANCE/SMITH_HAMMER_CRIT_BONUS, not a guarantee.
+const MATERIAL_EXPERTISE_CRIT_CAP = 0.20;
+function materialExpertiseCritBonus(matId){
+  return Math.min(MATERIAL_EXPERTISE_CRIT_CAP, materialExpertiseLevel(matId)*MATERIAL_EXPERTISE_CRIT_PER_LEVEL);
+}
+// Averaged across a fusion craft's two distinct materials rather than
+// picking just one, so a copper+platinum fusion gets a fair blend of both
+// specializations instead of favoring whichever material happens to be
+// checked first.
+function averageMaterialExpertiseCritBonus(distinctMaterials){
+  if(!distinctMaterials || !distinctMaterials.length) return 0;
+  return distinctMaterials.reduce((sum,id)=>sum+materialExpertiseCritBonus(id), 0) / distinctMaterials.length;
+}
+function gainMaterialExpertise(matId){
+  state.materialExpertise[matId] = (state.materialExpertise[matId]||0) + 1;
+}
 // Base multiplier doubled (250->500) per user feedback ("table upgrades are
 // too cheap"), same pass as TABLE2_CONFIG/GRID_UPGRADE_MARK_COST above — this
 // is the sole source of the grid upgrade's GOLD cost (via upgradeGridCost()
@@ -1566,6 +1725,12 @@ const state = {
   toast:null,
   ores:{copper:3, bronze:0, iron:0, steel:0, silver:0, gold:0, platinum:0},
   catalog:{}, fusionCatalog:new Set(),
+  // Per-material expertise (see materialExpertiseLevel()) — a second,
+  // sim-flavored progression axis alongside business level, tracked
+  // separately per material rather than one global number. Raw cumulative
+  // XP per material, not a stored level; materialExpertiseLevel() derives
+  // the level the same way state.level/expToNext() relate, just per-material.
+  materialExpertise:{copper:0, bronze:0, iron:0, steel:0, silver:0, gold:0, platinum:0},
   inventory:[],
   stations: [ makeTable(true), makeTable(false) ],
   orders: [],
@@ -1749,6 +1914,7 @@ function serializeState(){
     seqs: {sword:swordSeq, order:orderSeq, craft:craftSeq, expedition:expeditionSeq},
     stats: state.stats,
     unlockedAchievements: Array.from(state.unlockedAchievements),
+    materialExpertise: state.materialExpertise,
     avatarId: state.avatarId,
     titleId: state.titleId,
     dailyStreak: state.dailyStreak,
@@ -2060,6 +2226,10 @@ async function loadGame(){
     }
     if(data.stats) state.stats = Object.assign({swordsCrafted:0, fusionCrafted:0, ordersFulfilled:0, oreCollected:0, wheelSpins:0}, data.stats);
     state.unlockedAchievements = new Set(data.unlockedAchievements||[]);
+    // Merge onto the default shape rather than replacing outright, so a save
+    // from before this feature existed (or a future material added without
+    // a save-shape bump) still has every key present at 0, not undefined.
+    state.materialExpertise = Object.assign({copper:0,bronze:0,iron:0,steel:0,silver:0,gold:0,platinum:0}, data.materialExpertise||{});
     // Re-validated against the achievements Set just restored above, not
     // trusted blindly — a hand-edited save claiming an avatar/title whose
     // achievement was never actually unlocked falls back to null (initials/
@@ -2811,6 +2981,11 @@ function completeCraft(st, craftId){
   st.craftings.splice(craftIdx, 1);
   state.stats.swordsCrafted++;
   if(sword.fusion) state.stats.fusionCrafted++;
+  // Per-material expertise (see the section above) — one XP per DISTINCT
+  // material actually used, so a straight craft (one material, two matching
+  // cells) doesn't level twice as fast as a fusion craft just for touching
+  // the same ore in both cells.
+  c.distinct.forEach(matId=>gainMaterialExpertise(matId));
 }
 
 // Fires exactly once per sword NAME, the moment it's collected for the first
@@ -2972,7 +3147,7 @@ function hammerHit(stationIdx, craftId, hammerId, sourceId){
   if(hammerId==='gold'){ c.saleBonus = true; note=' This sword will sell for 20% more.'; }
   if(hammerId!=='magic' && Math.random()<HAMMER_QUALITY_CHANCE){ c.rankBumps++; note += ' The strike lands true &mdash; quality rises a tier!'; }
   c.apBonus += apAdd; c.dpBonus += dpAdd;
-  const critChance = HAMMER_HIT_CRIT_CHANCE + (hammerId==='smith' ? SMITH_HAMMER_CRIT_BONUS : 0);
+  const critChance = HAMMER_HIT_CRIT_CHANCE + (hammerId==='smith' ? SMITH_HAMMER_CRIT_BONUS : 0) + averageMaterialExpertiseCritBonus(c.distinct);
   const crit = Math.random()<critChance;
   if(crit){ c.rankBumps++; note += ' Critical hit!'; }
   const hm = HAMMERS.find(h=>h.id===hammerId);
@@ -4400,6 +4575,7 @@ function renderCatalogDetail(){
       return `<div class="catalogItem ${found?'':'locked'}">
         <div class="rankM">${found? recipe.name : '???'}</div>
         <div class="small">${found? (parts+' &middot; AP '+recipe.ap+' / DP '+recipe.dp) : parts+' (undiscovered)'}</div>
+        ${found && loreFor(recipe.name)? `<div class="small catalogLore">&ldquo;${loreFor(recipe.name)}&rdquo;</div>` : ''}
       </div>`;
     }).join('');
     return `<div class="catalogDetailHead">
@@ -4419,12 +4595,18 @@ function renderCatalogDetail(){
       return `<div class="catalogItem ${found?'':'locked'}">
         <div class="rank${r}">${found? sw.name : '???'}</div>
         <div class="small">${found? ('Rank '+r+' &middot; AP '+sw.ap+' / DP '+sw.dp+(sw.el?' &middot; '+sw.el:'')) : 'Undiscovered'}</div>
+        ${found && loreFor(sw.name)? `<div class="small catalogLore">&ldquo;${loreFor(sw.name)}&rdquo;</div>` : ''}
       </div>`;
     }).join('');
   }).join('');
   const totalForMat = RANKS.reduce((s,r)=>s+((SWORDS[m.id][r]||[]).length),0);
   const foundForMat = state.catalog[m.id].size;
   const pct = totalForMat? Math.round(foundForMat/totalForMat*100) : 0;
+  // Per-material expertise readout (see the section near HAMMER_QUALITY_CHANCE) —
+  // its own progress bar, separate from the discovery one above, since it's
+  // a separate axis (crafts with this material, not styles found).
+  const expertise = materialExpertiseProgress(m.id);
+  const expertisePct = Math.round(expertise.xp/expertise.toNext*100);
   return `<div class="catalogDetailHead">
       <span class="wf-lbl small">Material ${idx+1} of ${navList.length}</span>
       <h3 class="section-title" style="margin:2px 0 0;font-size:26px;">${m.name}</h3>
@@ -4432,6 +4614,11 @@ function renderCatalogDetail(){
       <div class="row" style="gap:10px;margin-top:6px;align-items:center;">
         <div class="barwrap" style="height:8px;"><div class="barfill" style="width:${pct}%;"></div></div>
         <span class="small" style="white-space:nowrap;">${foundForMat} / ${totalForMat}</span>
+      </div>
+      <div class="small" style="margin-top:8px;">Expertise Lvl ${expertise.level} &mdash; +${Math.round(materialExpertiseCritBonus(m.id)*100)}% hammer crit chance with ${m.name.toLowerCase()}</div>
+      <div class="row" style="gap:10px;margin-top:4px;align-items:center;">
+        <div class="barwrap" style="height:6px;"><div class="barfill" style="width:${expertisePct}%;background:var(--gold);"></div></div>
+        <span class="small" style="white-space:nowrap;">${expertise.xp} / ${expertise.toNext}</span>
       </div>
     </div>
     <div class="catalogGrid" style="flex:1;overflow-y:auto;grid-template-columns:1fr 1fr;align-content:start;">${items}</div>
@@ -5017,6 +5204,7 @@ function renderNewSwordPopup(){
       <div class="newSwordArtPanel"><img src="${art}" alt="${sword.name}"></div>
       <div class="newSwordName">${sword.name}</div>
       <div class="newSwordMeta">${sword.material} &middot; <span class="badge">${sword.rank}</span> &middot; AP ${sword.ap} / DP ${sword.dp}${sword.el?' &middot; '+sword.el:''}</div>
+      ${loreFor(sword.name)? `<div class="newSwordLore">&ldquo;${loreFor(sword.name)}&rdquo;</div>` : ''}
       <div class="row" style="justify-content:center;gap:10px;">
         <button onclick="closeNewSwordPopup()">Nice!</button>
         <button class="primary" onclick="viewNewSwordInCatalog()">View in Catalog</button>
