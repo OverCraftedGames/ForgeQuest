@@ -1190,10 +1190,18 @@ const MARK_PACKS = [
 
 const HAMMER_HIT_CRIT_CHANCE = 0.15;
 /* The plain smith hammer has no special effect otherwise, so it gets a
-   crit-chance edge on top of the base rate above to keep it worth using —
-   bumped again (0.07 → 0.12, i.e. 22% → 27% total) per a follow-up request
-   that the first bump still wasn't enough to make it feel worth reaching for. */
-const SMITH_HAMMER_CRIT_BONUS = 0.12;
+   crit-chance edge on top of the base rate above to keep it worth using.
+   Reverted 0.12 -> 0.07 (back to its pre-"bumped again" value, see git
+   history) once material expertise (MATERIAL_EXPERTISE_CRIT_PER_LEVEL
+   below) started stacking an additional +0-20% onto EVERY hammer's crit
+   chance equally: expertise doesn't erode smith's relative edge over the
+   special hammers (it adds the same amount to all of them), but it does
+   stack additively with smith's own bonus specifically, so at high mastery
+   smith's total (was 0.15+0.12+0.20=47%) ran well past every other
+   hammer's (0.15+0.20=35%) despite smith being free/unlimited-use and the
+   others costing real inventory. 0.07 keeps a real edge (42% vs 35% at max
+   mastery) without letting expertise blow that gap wide open. */
+const SMITH_HAMMER_CRIT_BONUS = 0.07;
 /* Chance a non-magic hammer hit raises quality a tier on its own (on top of the crit
    chance above); the magic hammer's tier-up is guaranteed instead of chance-based. */
 const HAMMER_QUALITY_CHANCE = 0.3;
@@ -1213,8 +1221,13 @@ const HAMMER_QUALITY_CHANCE = 0.3;
 // First-pass curve, not real playtesting — same "retune freely" spirit as
 // EXPEDITION_REP_DIVISOR. Gentle on purpose: this is meant to reward
 // long-term specialization, not level up in a handful of crafts the way
-// business level does.
-function materialExpertiseToNext(level){ return 5 + level*5; }
+// business level does. Per-level growth eased 5->3 (level 0->1 still costs
+// the same 5 XP either way, so early pacing is untouched) per a follow-up
+// request to make it "a little more forgiving, but not too much" -- cuts
+// total XP to reach a given level by roughly a third at the high end
+// (level 10: 275->185, level 20: 1050->670) without touching how it feels
+// in the first few levels.
+function materialExpertiseToNext(level){ return 5 + level*3; }
 function materialExpertiseLevel(matId){
   let xp = state.materialExpertise[matId] || 0;
   let level = 0;
