@@ -18,7 +18,7 @@
     --gold:#8c491a; --accent:#c67139; --accent-100:#fff2eb; --accent-600:#b2622d;
     --text:#201e1d; --muted:rgba(32,30,29,.72);
     --green:#56633f; --green-bg:rgba(122,138,94,.1); --green-border:rgba(122,138,94,.55);
-    --danger:#a8402f; --gem:#56633f;
+    --danger:#a8402f; --mark:#56633f;
     --font-heading:'Caprasimo',Georgia,serif; --font-body:'Figtree','Trebuchet MS',system-ui,sans-serif;
     --radius-lg:26px; --radius-md:16px; --radius-sm:10px;
     --shadow-md:0 3px 10px rgba(46,43,37,.12); --shadow-lg:0 12px 32px rgba(46,43,37,.16);
@@ -904,14 +904,14 @@ const ACHIEVEMENTS = [
   {id:'second_table', name:'Expanding Forge', desc:'Unlock the second crafting table.', icon:'🪑', check:s=>!!(s.stations[1] && s.stations[1].unlocked)},
   {id:'wheel_10', name:'Wheel of Fortune', desc:'Spin the wheel 10 times.', icon:'🎡', check:s=>s.stats.wheelSpins>=10},
 ];
-const ACHIEVEMENT_GEM_REWARD = 5;
+const ACHIEVEMENT_MARK_REWARD = 5;
 function checkAchievements(){
   ACHIEVEMENTS.forEach(a=>{
     if(state.unlockedAchievements.has(a.id)) return;
     if(a.check(state)){
       state.unlockedAchievements.add(a.id);
-      state.gems += ACHIEVEMENT_GEM_REWARD;
-      setToast('🏆 Achievement unlocked: '+a.name+'! (+'+ACHIEVEMENT_GEM_REWARD+' forge marks)');
+      state.marks += ACHIEVEMENT_MARK_REWARD;
+      setToast('🏆 Achievement unlocked: '+a.name+'! (+'+ACHIEVEMENT_MARK_REWARD+' forge marks)');
     }
   });
 }
@@ -952,7 +952,7 @@ function setTitle(id){
 
 /* Daily login streak — a 7-day cycle of escalating rewards that repeats
    indefinitely (day 7's reward loops back into day 1, not a one-time series).
-   Gems match the existing achievement reward (5) rather than inventing a
+   Marks match the existing achievement reward (5) rather than inventing a
    bigger number just because it's "special". Ore days grant a flat quantity
    of a randomly-chosen *currently unlocked* material (rolled once, in
    checkDailyLogin() below, not re-rolled at claim time) — a flat amount
@@ -962,9 +962,9 @@ function setTitle(id){
    since it's capped at once/day) little jackpot rather than something to
    engineer away. */
 // Ore quantities halved (2/3/4/6, was 3/5/8/12) per a follow-up "too much
-// ore" — gem days untouched.
+// ore" — mark days untouched.
 const DAILY_LOGIN_REWARDS = [
-  {ore:2}, {ore:3}, {gems:3}, {ore:4}, {gems:5}, {ore:6}, {gems:10},
+  {ore:2}, {ore:3}, {marks:3}, {ore:4}, {marks:5}, {ore:6}, {marks:10},
 ];
 // Local calendar date, not UTC (Date#toISOString) — a player's "today" should
 // follow their own midnight, not Greenwich's. Used as a plain string key so
@@ -1004,14 +1004,14 @@ function claimDailyLogin(){
   if(!popup) return;
   const reward = DAILY_LOGIN_REWARDS[popup.day-1];
   if(reward.gold) state.gold += reward.gold;
-  if(reward.gems) state.gems += reward.gems;
+  if(reward.marks) state.marks += reward.marks;
   if(reward.ore) state.ores[popup.oreId] = (state.ores[popup.oreId]||0) + reward.ore;
   state.dailyStreak = popup.day;
   state.lastDailyClaim = dateKey(0);
   state.dailyRewardPopup = null;
   const parts = [
     reward.gold?('+'+reward.gold+' gold'):null,
-    reward.gems?('+'+reward.gems+' forge marks'):null,
+    reward.marks?('+'+reward.marks+' forge marks'):null,
     reward.ore?('+'+reward.ore+' '+matById(popup.oreId).name+' ore'):null,
   ].filter(Boolean).join(', ');
   setToast('Day '+popup.day+' login reward claimed: '+parts+'!');
@@ -1036,48 +1036,48 @@ const CRAFT_TABLE_BG = [
   "backgrounds/craft-table-4x4.jpg",
 ];
 /* Table 0 is always unlocked and free. Table 1 is the one extra table a player can buy —
-   its gem price is steep, since a whole second table roughly doubles capacity. Gated by
-   business level too (not just gold/gems) — a second table is a big capacity jump, so it's
+   its mark price is steep, since a whole second table roughly doubles capacity. Gated by
+   business level too (not just gold/marks) — a second table is a big capacity jump, so it's
    meant to read as an earned milestone, not just an early impulse-buy once you scrape the gold. */
 // Doubled per user feedback ("table upgrades are too cheap") — both the gold
-// and gem costs below, 600->1200 gold / 150->300 gems, unchanged relative to
-// each other so gems still buy the same ~4x convenience skip over gold they
+// and mark costs below, 600->1200 gold / 150->300 marks, unchanged relative to
+// each other so marks still buy the same ~4x convenience skip over gold they
 // always did.
 const TABLE2_CONFIG = {reqLevel:5, cost:1200};
-const TABLE2_GEM_COST = 300;
-/* Gem price to skip the gold cost of each grid-size upgrade, index = current tier.
+const TABLE2_MARK_COST = 300;
+/* Mark price to skip the gold cost of each grid-size upgrade, index = current tier.
    Doubled alongside stationUpgradeCost()'s own multiplier below, same user
    feedback pass — was [15, 30, 55, 85]. */
-const GRID_UPGRADE_GEM_COST = [30, 60, 110, 170];
+const GRID_UPGRADE_MARK_COST = [30, 60, 110, 170];
 /* Business-level gate on each grid upgrade, index = current tier (same indexing as
-   GRID_UPGRADE_GEM_COST above) — applies whether paying gold or gems, same as
+   GRID_UPGRADE_MARK_COST above) — applies whether paying gold or marks, same as
    TABLE2_CONFIG.reqLevel does for the second table. Escalates alongside material
    unlocks (bronze@3, iron@6, steel@10) so a bigger table reads as reputation-earned,
    not just a gold sink. */
 const GRID_UPGRADE_REQ_LEVEL = [2, 4, 7, 11];
-/* Premium (gem) prices to buy a single hammer token directly, skipping the wheel. */
-const HAMMER_GEM_COST = {fire:25, magic:45, obsidian:30, gold:35, glass:20};
+/* Premium (mark) prices to buy a single hammer token directly, skipping the wheel. */
+const HAMMER_MARK_COST = {fire:25, magic:45, obsidian:30, gold:35, glass:20};
 
 /* RETIRED, kept dormant rather than deleted — see renderShop()'s own doc
    comment for the decision. This was originally framed as "framework ahead
    of Steam integration," but the actual call ended up being: ForgeQuest
-   ships as a one-time-purchase game, gems earned entirely for free, no
-   real-money IAP at all. Not reachable from the UI (no "Buy gems" tab
-   anymore), and purchaseGemPack() was never wired to a real payment rail
+   ships as a one-time-purchase game, marks earned entirely for free, no
+   real-money IAP at all. Not reachable from the UI (no "Buy marks" tab
+   anymore), and purchaseMarkPack() was never wired to a real payment rail
    to begin with, so nothing here can charge anyone regardless. Left in
    place because it's cheap to have built and could become a real, optional
    cosmetic-pack DLC later if the game does well post-launch — `sku` was a
    placeholder Steam item id for that possible future, everything else
-   renders straight from this array (see renderGemPacks(), also unreachable
-   but intact). Sizes/prices were a rough first pass sized off the gem
-   economy at the time (a hammer runs 20-45 gems, a full 2nd table 150,
+   renders straight from this array (see renderMarkPacks(), also unreachable
+   but intact). Sizes/prices were a rough first pass sized off the mark
+   economy at the time (a hammer runs 20-45 marks, a full 2nd table 150,
    grid upgrades 15-85), not real market research — re-derive before ever
    reviving this, don't just flip it back on as-is. */
-const GEM_PACKS = [
-  {id:'pouch',   gems:100,  bonus:0,   priceUSD:0.99,  sku:'gems_pouch_100'},
-  {id:'satchel', gems:300,  bonus:30,  priceUSD:2.99,  sku:'gems_satchel_330'},
-  {id:'chest',   gems:750,  bonus:100, priceUSD:6.99,  sku:'gems_chest_850'},
-  {id:'vault',   gems:2000, bonus:350, priceUSD:16.99, sku:'gems_vault_2350'},
+const MARK_PACKS = [
+  {id:'pouch',   marks:100,  bonus:0,   priceUSD:0.99,  sku:'marks_pouch_100'},
+  {id:'satchel', marks:300,  bonus:30,  priceUSD:2.99,  sku:'marks_satchel_330'},
+  {id:'chest',   marks:750,  bonus:100, priceUSD:6.99,  sku:'marks_chest_850'},
+  {id:'vault',   marks:2000, bonus:350, priceUSD:16.99, sku:'marks_vault_2350'},
 ];
 
 const HAMMER_HIT_CRIT_CHANCE = 0.15;
@@ -1090,7 +1090,7 @@ const SMITH_HAMMER_CRIT_BONUS = 0.12;
    chance above); the magic hammer's tier-up is guaranteed instead of chance-based. */
 const HAMMER_QUALITY_CHANCE = 0.3;
 // Base multiplier doubled (250->500) per user feedback ("table upgrades are
-// too cheap"), same pass as TABLE2_CONFIG/GRID_UPGRADE_GEM_COST above — this
+// too cheap"), same pass as TABLE2_CONFIG/GRID_UPGRADE_MARK_COST above — this
 // is the sole source of the grid upgrade's GOLD cost (via upgradeGridCost()
 // below), so doubling it here covers every tier/caller at once rather than
 // hand-doubling a per-tier table.
@@ -1397,7 +1397,7 @@ function saveUsername(){
 // backend — a fully-populated 4x4 table stays well under that limit even
 // with the grid/cells/distinct fields below). Deliberately just the
 // stations/craftings shape, not the whole save: a friend visiting
-// shouldn't see gold/gems/inventory, only what's actually on the
+// shouldn't see gold/marks/inventory, only what's actually on the
 // workbench, same spirit as only being able to hammer a station, never
 // open someone else's shop.
 //
@@ -1561,7 +1561,7 @@ function startFriendBackendLoop(){
 }
 
 const state = {
-  level:1, exp:0, gold:600, gems:0,
+  level:1, exp:0, gold:600, marks:0,
   tab:'workshop',
   toast:null,
   ores:{copper:3, bronze:0, iron:0, steel:0, silver:0, gold:0, platinum:0},
@@ -1632,7 +1632,7 @@ const state = {
   // resolving), AND expeditionResultQueue ARE persisted — unlike
   // dailyRewardPopup above, a queued result isn't a re-derivable "offer",
   // it's the record of something that already happened: resolveExpedition()
-  // already granted the gold/gems/returned sword by the time it's queued, so
+  // already granted the gold/marks/returned sword by the time it's queued, so
   // losing the queue entry on an untimely reload wouldn't lose any reward,
   // just silently drop the player's only explanation of where it came from.
   // Only expeditionsOpen (the modal itself) follows the usual not-persisted
@@ -1723,14 +1723,14 @@ let swordSeq=1, orderSeq=1, craftSeq=1;
    localStorage-backed save. Friends/friendRequests are intentionally NOT
    persisted — that tab is an explicit mock ("no backend yet"), so it always
    resets to the flavor default on load. Everything that's real progress
-   (gold, gems, rep, ores, inventory, stations/craftings, orders, hammers,
+   (gold, marks, rep, ores, inventory, stations/craftings, orders, hammers,
    catalog, mine timers, wheel cooldown) round-trips. */
 const SAVE_KEY = 'forgequest_save_v1';
 
 function serializeState(){
   return {
     v: 1,
-    level: state.level, exp: state.exp, gold: state.gold, gems: state.gems,
+    level: state.level, exp: state.exp, gold: state.gold, marks: state.marks,
     tab: state.tab,
     ores: state.ores,
     catalog: Object.fromEntries(Object.entries(state.catalog).map(([id,set])=>[id, Array.from(set)])),
@@ -1777,7 +1777,7 @@ let isResetting = false; // set by debugResetGame() so the pagehide/visibilitych
 // patched, since "silently destroy real progress" is bad enough to defend
 // in depth rather than trust a single fix to be the whole story.
 // Matches the EXACT untouched new-game starting values (see `const state`'s
-// own level:1/gold:600/gems:0/ores defaults) — deliberately an exact
+// own level:1/gold:600/marks:0/ores defaults) — deliberately an exact
 // fingerprint, not a fuzzy byte-size comparison. An earlier version of this
 // tried "new save is under half the size of the existing one" as a
 // pre-filter, which was WRONG — checked against the actual real-world
@@ -1785,7 +1785,7 @@ let isResetting = false; // set by debugResetGame() so the pagehide/visibilitych
 // save is a 66% ratio, past a 50% cutoff) and it would have let the exact
 // case this exists to catch slip through. The field-value fingerprint alone
 // is already about as specific as a check can be: reaching this exact
-// combination — zero exp spent, the precise starting gold/gems/ore counts,
+// combination — zero exp spent, the precise starting gold/marks/ore counts,
 // an empty catalog, zero friends — is essentially impossible for any real
 // session that has actually done anything, so there's no need to also
 // gate on size.
@@ -2005,7 +2005,7 @@ async function loadGame(){
     state.level = data.level ?? state.level;
     state.exp = data.exp ?? state.exp;
     state.gold = data.gold ?? state.gold;
-    state.gems = data.gems ?? state.gems;
+    state.marks = data.marks ?? state.marks;
     if(data.tab) state.tab = data.tab;
     // Merge onto a fresh zero-defaulted template rather than replacing outright —
     // an older save made before a new material existed (e.g. Platinum, added
@@ -2380,12 +2380,12 @@ function fulfillOrder(orderId){
   state.gold += reward;
   gainRep(order.rewardRep);
   state.stats.ordersFulfilled++;
-  // A small gem trickle for fusion swords specifically, awarded on the order
+  // A small mark trickle for fusion swords specifically, awarded on the order
   // that actually pays out for one — not at craft/collect time, so it can't
   // be farmed by crafting fusion swords and never selling them.
-  let gemNote = '';
-  if(sword.fusion){ state.gems += 1; gemNote = ' (+1 forge mark)'; }
-  setToast(order.requester+' takes the '+sword.name+' and pays '+reward.toLocaleString()+' gold!'+gemNote);
+  let markNote = '';
+  if(sword.fusion){ state.marks += 1; markNote = ' (+1 forge mark)'; }
+  setToast(order.requester+' takes the '+sword.name+' and pays '+reward.toLocaleString()+' gold!'+markNote);
   if(order.guaranteed){
     state.guaranteedOrder = null;
   } else {
@@ -2430,9 +2430,9 @@ const EXPEDITION_PARTIES = [
 // second hand-typed unlock constant that could drift out of sync with it,
 // the exact desync class item 79/80 already documented once for SWORD_SPRITE.
 const EXPEDITION_TIERS = {
-  easy:   { label:'Easy',   durationMs:3*60*60*1000,  rewardMult:1.75, gemsOnSuccess:0, weight:50, reqLevel:8  },
-  medium: { label:'Medium', durationMs:6*60*60*1000,  rewardMult:3.25, gemsOnSuccess:3, weight:35, reqLevel:10 },
-  hard:   { label:'Hard',   durationMs:12*60*60*1000, rewardMult:6.5,  gemsOnSuccess:8, weight:15, reqLevel:12 },
+  easy:   { label:'Easy',   durationMs:3*60*60*1000,  rewardMult:1.75, marksOnSuccess:0, weight:50, reqLevel:8  },
+  medium: { label:'Medium', durationMs:6*60*60*1000,  rewardMult:3.25, marksOnSuccess:3, weight:35, reqLevel:10 },
+  hard:   { label:'Hard',   durationMs:12*60*60*1000, rewardMult:6.5,  marksOnSuccess:8, weight:15, reqLevel:12 },
 };
 // Flat chance a party sends one sword back after a *successful* run —
 // deliberately not scaled by anything (tier, margin, etc.): a bonus on an
@@ -2444,7 +2444,7 @@ const EXPEDITION_RETURN_CHANCE = 0.28;
 const EXPEDITION_FAILURE_PAYOUT_FRACTION = 0.22;
 // Real design gap this addresses: business level only advances via gainRep(),
 // and until now the ONLY meaningful source of it was Orders (orderRep() below,
-// reward/60) — resolveExpedition() paid gold/gems but never rep at all. Since
+// reward/60) — resolveExpedition() paid gold/marks but never rep at all. Since
 // Expeditions are explicitly meant to out-earn Orders (rewardMult up to 6.5x),
 // a player who leans on them ends up with a large, growing gold pile and a
 // stalled business level, since expToNext(level) keeps climbing with nothing
@@ -2452,7 +2452,7 @@ const EXPEDITION_FAILURE_PAYOUT_FRACTION = 0.22;
 // a worse gold-to-rep rate than Orders (this divisor vs. orderRep's 60) so
 // Expeditions stay the better *gold* engine and Orders stay the better *rep*
 // engine, rather than Expeditions quietly becoming strictly better at both.
-// Success only (matches gemsOnSuccess's own "onSuccess" framing) — a failed
+// Success only (matches marksOnSuccess's own "onSuccess" framing) — a failed
 // run still pays partial gold via EXPEDITION_FAILURE_PAYOUT_FRACTION above,
 // but contributes nothing to leveling, keeping the risk/reward real.
 const EXPEDITION_REP_DIVISOR = 150;
@@ -2627,10 +2627,10 @@ function resolveExpedition(exp){
   const tier = EXPEDITION_TIERS[exp.tier];
   const success = Math.random() < expeditionSuccessChance(exp.partyPower, exp.floorPower);
   const variance = 0.94 + Math.random()*0.12; // same ±6% convention as orderReward()/fusionSellPrice()
-  let goldReward, gemsReward = 0, repReward = 0, returnedSword = null;
+  let goldReward, marksReward = 0, repReward = 0, returnedSword = null;
   if(success){
     goldReward = Math.round(exp.referenceValue * tier.rewardMult * variance);
-    gemsReward = tier.gemsOnSuccess;
+    marksReward = tier.marksOnSuccess;
     // See EXPEDITION_REP_DIVISOR's doc comment — success-only, deliberately
     // worse gold-to-rep rate than orderRep() so Expeditions gain a real
     // leveling contribution without out-competing Orders at their own job.
@@ -2642,11 +2642,11 @@ function resolveExpedition(exp){
     goldReward = Math.round(exp.referenceValue * tier.rewardMult * EXPEDITION_FAILURE_PAYOUT_FRACTION * variance);
   }
   state.gold += goldReward;
-  state.gems += gemsReward;
+  state.marks += marksReward;
   if(repReward>0) gainRep(repReward); // no-op-safe on failure, repReward stays 0
   if(returnedSword) state.inventory.push({...returnedSword, id:'sw'+(swordSeq++)}); // fresh id — the snapshot's own id was already removed from inventory at commit time
   state.expeditionResultQueue.push({
-    id: exp.id, party: exp.party, tier: exp.tier, success, goldReward, gemsReward, repReward,
+    id: exp.id, party: exp.party, tier: exp.tier, success, goldReward, marksReward, repReward,
     returnedSwordName: returnedSword ? returnedSword.name : null,
   });
 }
@@ -3503,7 +3503,7 @@ function formatMs(ms){
 // pct values must sum to 100. Each of the 5 special hammers gets its own 5% slot
 // (25% total) instead of one combined "any hammer" bucket, with the extra 3
 // percentage points that took taken out of the small-gold slice specifically
-// (35%->32%), leaving the jackpot/ore/gems slices untouched.
+// (35%->32%), leaving the jackpot/ore/marks slices untouched.
 const WHEEL_SEGMENTS = [
   {id:'gold_small',  pct:32, label:'Gold',            color:'#caa24a', kind:'gold_small'},
   {id:'gold_big',    pct:8,  label:'Jackpot!',         color:'#e6c34d', kind:'gold_big'},
@@ -3513,7 +3513,7 @@ const WHEEL_SEGMENTS = [
   {id:'obsidian',    pct:5,  label:'Obsidian hammer',  color:'#3a3a3a', kind:'hammer', hammerId:'obsidian'},
   {id:'gold_hammer', pct:5,  label:'Gold hammer',      color:'#b8912e', kind:'hammer', hammerId:'gold'},
   {id:'glass',       pct:5,  label:'Glass hammer',     color:'#7fa8bd', kind:'hammer', hammerId:'glass'},
-  {id:'gems',        pct:10, label:'Forge Marks',      color:'#4fae8a', kind:'gems'},
+  {id:'marks',        pct:10, label:'Forge Marks',      color:'#4fae8a', kind:'marks'},
 ];
 function pickWheelSegment(){
   const r = Math.random()*100;
@@ -3542,9 +3542,9 @@ function applyWheelReward(seg){
     state.hammerInventory[seg.hammerId] = (state.hammerInventory[seg.hammerId]||0)+1;
     const hm = HAMMERS.find(x=>x.id===seg.hammerId);
     setToast('The wheel lands on a '+hm.name+'!');
-  } else if(seg.kind==='gems'){
+  } else if(seg.kind==='marks'){
     const amt = Math.random()<0.7 ? 50 : 100;
-    state.gems += amt;
+    state.marks += amt;
     setToast('The wheel lands on '+amt+' forge marks!');
   }
 }
@@ -3606,13 +3606,13 @@ function upgradeStation(idx){
   setToast('Table '+(idx+1)+' upgraded to '+rows+'×'+cols+'.');
   render();
 }
-function upgradeStationGems(idx){
+function upgradeStationMarks(idx){
   const st = state.stations[idx];
   if(!st.unlocked || st.tier>=MAX_TABLE_TIER) return;
   if(state.level<GRID_UPGRADE_REQ_LEVEL[st.tier]) return;
-  const cost = GRID_UPGRADE_GEM_COST[st.tier];
-  if(cost===undefined || state.gems<cost) return;
-  state.gems -= cost;
+  const cost = GRID_UPGRADE_MARK_COST[st.tier];
+  if(cost===undefined || state.marks<cost) return;
+  state.marks -= cost;
   growTableGrid(st);
   const [rows, cols] = GRID_TIERS[st.tier];
   setToast('Table '+(idx+1)+' upgraded to '+rows+'×'+cols+' with forge marks.');
@@ -3627,19 +3627,19 @@ function unlockStation(idx){
   setToast('New crafting table unlocked!');
   render();
 }
-function buyStationGems(idx){
+function buyStationMarks(idx){
   const st = state.stations[idx];
   if(st.unlocked) return;
-  if(state.level<TABLE2_CONFIG.reqLevel || state.gems<TABLE2_GEM_COST) return;
-  state.gems -= TABLE2_GEM_COST;
+  if(state.level<TABLE2_CONFIG.reqLevel || state.marks<TABLE2_MARK_COST) return;
+  state.marks -= TABLE2_MARK_COST;
   st.unlocked = true;
   setToast('New crafting table unlocked with forge marks!');
   render();
 }
-function buyHammerGems(id){
-  const cost = HAMMER_GEM_COST[id];
-  if(cost===undefined || state.gems<cost) return;
-  state.gems -= cost;
+function buyHammerMarks(id){
+  const cost = HAMMER_MARK_COST[id];
+  if(cost===undefined || state.marks<cost) return;
+  state.marks -= cost;
   state.hammerInventory[id] = (state.hammerInventory[id]||0)+1;
   const hm = HAMMERS.find(h=>h.id===id);
   setToast('Bought a '+hm.name+' for '+cost+' forge marks!');
@@ -3735,7 +3735,7 @@ function selectCatalogMat(id){ state.selectedCatalogMatId = id; render(); }
 
 function toggleDebug(){ state.debugOpen = !state.debugOpen; render(); }
 function debugAddGold(amount){ state.gold = Math.max(0, state.gold+amount); render(); }
-function debugAddGems(amount){ state.gems = Math.max(0, state.gems+amount); render(); }
+function debugAddMarks(amount){ state.marks = Math.max(0, state.marks+amount); render(); }
 function debugAddRep(amount){
   if(amount>0){ gainRep(amount); }
   else { state.exp = Math.max(0, state.exp+amount); render(); }
@@ -3761,7 +3761,7 @@ function renderStatbar(){
       <div class="barlabel">${state.exp}/${expToNext(state.level)}</div></div>
     </div>
     <div class="stat"><span style="color:var(--gold);"><img src="${GOLD_ICON}" alt="Gold" style="width:16px;height:16px;object-fit:contain;vertical-align:-3px;"> ${state.gold.toLocaleString()}</span></div>
-    <div class="stat"><span style="color:var(--gem);">&#128142; ${state.gems.toLocaleString()}</span></div>
+    <div class="stat"><span style="color:var(--mark);">&#128142; ${state.marks.toLocaleString()}</span></div>
     <button onclick="openWheel()" ${ready?'':'disabled'} title="Spin once an hour for gold, ore, or one of 5 special hammers">
       &#127920; ${ready? 'Spin the wheel' : formatMs(remain)}
     </button>
@@ -3770,39 +3770,39 @@ function renderStatbar(){
 
 function setShopSubTab(t){ state.shopSubTab = t; render(); }
 
-// Split into two sub-tabs (ore vs. gems) so each fits on screen without scrolling,
+// Split into two sub-tabs (ore vs. marks) so each fits on screen without scrolling,
 // instead of one long panel stacking both shops.
 //
-// RETIRED: a third "Buy gems" sub-tab (real-money gem packs, see GEM_PACKS'
+// RETIRED: a third "Buy marks" sub-tab (real-money mark packs, see MARK_PACKS'
 // own doc comment further down) used to live here. Explicit decision: this
-// ships as a one-time-purchase game with gems earned entirely for free, no
+// ships as a one-time-purchase game with marks earned entirely for free, no
 // real-money IAP. Removed from the switcher/render path so players never
-// see a purchase prompt that goes nowhere, but GEM_PACKS/renderGemPacks()/
-// purchaseGemPack() are left in place, unreachable rather than deleted --
+// see a purchase prompt that goes nowhere, but MARK_PACKS/renderMarkPacks()/
+// purchaseMarkPack() are left in place, unreachable rather than deleted --
 // cheap to revive as an optional cosmetic-pack DLC later if the game does
 // well, without rebuilding the pricing/UI groundwork from scratch.
 function renderShop(){
-  const sub = state.shopSubTab==='gems' ? 'gems' : 'ore';
+  const sub = state.shopSubTab==='marks' ? 'marks' : 'ore';
   const switcher = `<div class="row" style="gap:8px;margin-bottom:14px;">
     <button class="${sub==='ore'?'primary':''}" onclick="setShopSubTab('ore')">Ore shop</button>
-    <button class="${sub==='gems'?'primary':''}" onclick="setShopSubTab('gems')">Forge Mark shop</button>
+    <button class="${sub==='marks'?'primary':''}" onclick="setShopSubTab('marks')">Forge Mark shop</button>
   </div>`;
-  const body = sub==='ore' ? renderOreShop() : renderGemShop();
+  const body = sub==='ore' ? renderOreShop() : renderMarkShop();
   return switcher + body;
 }
 
-// RETIRED, unreachable from the UI — see GEM_PACKS' doc comment for the
+// RETIRED, unreachable from the UI — see MARK_PACKS' doc comment for the
 // decision (one-time-purchase game, no real-money IAP). Left intact rather
 // than deleted in case a cosmetic-pack DLC gets revisited post-launch.
-function renderGemPacks(){
-  const rows = GEM_PACKS.map(p=>{
-    const total = p.gems + p.bonus;
+function renderMarkPacks(){
+  const rows = MARK_PACKS.map(p=>{
+    const total = p.marks + p.bonus;
     return `<div class="shopRow">
       <div>
-        <b>${total.toLocaleString()} forge marks</b>${p.bonus? ` <span class="oreTag">(${p.gems.toLocaleString()} + ${p.bonus.toLocaleString()} bonus)</span>` : ''}
+        <b>${total.toLocaleString()} forge marks</b>${p.bonus? ` <span class="oreTag">(${p.marks.toLocaleString()} + ${p.bonus.toLocaleString()} bonus)</span>` : ''}
         <div class="small">$${p.priceUSD.toFixed(2)}</div>
       </div>
-      <button onclick="purchaseGemPack('${p.id}')">${DEBUG_BUILD? '[DEBUG] Grant' : 'Buy'}</button>
+      <button onclick="purchaseMarkPack('${p.id}')">${DEBUG_BUILD? '[DEBUG] Grant' : 'Buy'}</button>
     </div>`;
   }).join('');
   return `<div class="panel">
@@ -3812,18 +3812,18 @@ function renderGemPacks(){
   </div>`;
 }
 
-// RETIRED, unreachable from the UI (see GEM_PACKS' doc comment) — no path
-// in the game calls this anymore, since renderGemPacks() is no longer
+// RETIRED, unreachable from the UI (see MARK_PACKS' doc comment) — no path
+// in the game calls this anymore, since renderMarkPacks() is no longer
 // reachable either. Left intact, still functionally a no-op-for-real-money
 // stub, purely so a future cosmetic-pack revival wouldn't need to rebuild
 // this from scratch. Do not wire this to a real payment rail as-is; the
-// gem economy/pricing here predates the decision to not sell gems at all.
-function purchaseGemPack(packId){
-  const pack = GEM_PACKS.find(p=>p.id===packId);
+// mark economy/pricing here predates the decision to not sell marks at all.
+function purchaseMarkPack(packId){
+  const pack = MARK_PACKS.find(p=>p.id===packId);
   if(!pack) return;
   if(DEBUG_BUILD){
-    const total = pack.gems + pack.bonus;
-    state.gems += total;
+    const total = pack.marks + pack.bonus;
+    state.marks += total;
     setToast('[DEBUG] Granted '+total+' forge marks (retired feature, debug-only).');
     render();
     return;
@@ -3855,44 +3855,44 @@ function renderOreShop(){
   </div>`;
 }
 
-function renderGemShop(){
+function renderMarkShop(){
   const unlockRows = state.stations.map((st,i)=>{
     if(st.unlocked) return '';
     const locked = state.level<TABLE2_CONFIG.reqLevel;
-    const canBuy = !locked && state.gems>=TABLE2_GEM_COST;
+    const canBuy = !locked && state.marks>=TABLE2_MARK_COST;
     return `<div class="shopRow">
       <div>
         <b>Table ${i+1}</b>
-        <div class="small">${locked? 'Requires business level '+TABLE2_CONFIG.reqLevel : TABLE2_GEM_COST.toLocaleString()+' forge marks'}</div>
+        <div class="small">${locked? 'Requires business level '+TABLE2_CONFIG.reqLevel : TABLE2_MARK_COST.toLocaleString()+' forge marks'}</div>
       </div>
-      <button onclick="buyStationGems(${i})" ${canBuy?'':'disabled'}>Buy with forge marks</button>
+      <button onclick="buyStationMarks(${i})" ${canBuy?'':'disabled'}>Buy with forge marks</button>
     </div>`;
   }).join('');
   const upgradeRows = state.stations.map((st,i)=>{
     if(!st.unlocked || st.tier>=MAX_TABLE_TIER) return '';
-    const cost = GRID_UPGRADE_GEM_COST[st.tier];
+    const cost = GRID_UPGRADE_MARK_COST[st.tier];
     const reqLevel = GRID_UPGRADE_REQ_LEVEL[st.tier];
     const locked = state.level<reqLevel;
     const [nr, nc] = GRID_TIERS[st.tier+1];
-    const canBuy = !locked && state.gems>=cost;
+    const canBuy = !locked && state.marks>=cost;
     return `<div class="shopRow">
       <div>
         <b>Table ${i+1} grid</b>
         <div class="small">${locked? 'Requires business level '+reqLevel : 'Upgrade to '+nr+'&times;'+nc+' &mdash; '+cost.toLocaleString()+' forge marks'}</div>
       </div>
-      <button onclick="upgradeStationGems(${i})" ${canBuy?'':'disabled'}>Buy with forge marks</button>
+      <button onclick="upgradeStationMarks(${i})" ${canBuy?'':'disabled'}>Buy with forge marks</button>
     </div>`;
   }).join('');
   const tableRows = unlockRows + upgradeRows;
   const hammerRows = HAMMERS.filter(h=>h.id!=='smith').map(h=>{
-    const cost = HAMMER_GEM_COST[h.id];
-    const canBuy = state.gems>=cost;
+    const cost = HAMMER_MARK_COST[h.id];
+    const canBuy = state.marks>=cost;
     return `<div class="shopRow">
       <div>
         <b>${h.name}</b> <span class="oreTag">&mdash; owned: ${state.hammerInventory[h.id]||0}</span>
         <div class="small">${h.desc}</div>
       </div>
-      <button onclick="buyHammerGems('${h.id}')" ${canBuy?'':'disabled'}>Buy 1 (${cost} forge marks)</button>
+      <button onclick="buyHammerMarks('${h.id}')" ${canBuy?'':'disabled'}>Buy 1 (${cost} forge marks)</button>
     </div>`;
   }).join('');
   return `<div class="panel">
@@ -4125,14 +4125,14 @@ function renderStationGrid(stationIdx, st){
 function renderStation(st, i){
   if(!st.unlocked){
     const canUnlock = state.level>=TABLE2_CONFIG.reqLevel && state.gold>=TABLE2_CONFIG.cost;
-    const canUnlockGems = state.level>=TABLE2_CONFIG.reqLevel && state.gems>=TABLE2_GEM_COST;
-    const reason = state.level<TABLE2_CONFIG.reqLevel ? 'Requires business level '+TABLE2_CONFIG.reqLevel : (TABLE2_CONFIG.cost.toLocaleString()+' gold or '+TABLE2_GEM_COST.toLocaleString()+' forge marks');
+    const canUnlockMarks = state.level>=TABLE2_CONFIG.reqLevel && state.marks>=TABLE2_MARK_COST;
+    const reason = state.level<TABLE2_CONFIG.reqLevel ? 'Requires business level '+TABLE2_CONFIG.reqLevel : (TABLE2_CONFIG.cost.toLocaleString()+' gold or '+TABLE2_MARK_COST.toLocaleString()+' forge marks');
     return `<div class="station locked">
       <div class="title">Table ${i+1}</div>
       <div class="small">${reason}</div>
       <div class="row" style="gap:6px;">
         <button ${canUnlock?'':'disabled'} onclick="unlockStation(${i})">Unlock${TABLE2_CONFIG.cost?' ('+TABLE2_CONFIG.cost.toLocaleString()+' gold)':''}</button>
-        <button ${canUnlockGems?'':'disabled'} onclick="buyStationGems(${i})">Unlock (${TABLE2_GEM_COST.toLocaleString()} gems)</button>
+        <button ${canUnlockMarks?'':'disabled'} onclick="buyStationMarks(${i})">Unlock (${TABLE2_MARK_COST.toLocaleString()} forge marks)</button>
       </div>
     </div>`;
   }
@@ -4141,12 +4141,12 @@ function renderStation(st, i){
   const upReqLevel = GRID_UPGRADE_REQ_LEVEL[st.tier];
   const levelLocked = st.tier<MAX_TABLE_TIER && state.level<upReqLevel;
   const canUpgrade = st.tier<MAX_TABLE_TIER && !levelLocked && state.gold>=upCost;
-  // Same gem-priced upgrade the Gem shop already offers, surfaced right on the
-  // table itself so a gem-rich player doesn't have to tab away to spend them —
-  // GRID_UPGRADE_GEM_COST has no entry past the last real upgrade (tier index
-  // MAX_TABLE_TIER-1), matching upgradeStationGems()'s own tier<MAX_TABLE_TIER guard.
-  const gemCost = GRID_UPGRADE_GEM_COST[st.tier];
-  const canUpgradeGems = st.tier<MAX_TABLE_TIER && !levelLocked && gemCost!==undefined && state.gems>=gemCost;
+  // Same mark-priced upgrade the Mark shop already offers, surfaced right on the
+  // table itself so a mark-rich player doesn't have to tab away to spend them —
+  // GRID_UPGRADE_MARK_COST has no entry past the last real upgrade (tier index
+  // MAX_TABLE_TIER-1), matching upgradeStationMarks()'s own tier<MAX_TABLE_TIER guard.
+  const markCost = GRID_UPGRADE_MARK_COST[st.tier];
+  const canUpgradeMarks = st.tier<MAX_TABLE_TIER && !levelLocked && markCost!==undefined && state.marks>=markCost;
   const nextDims = st.tier<MAX_TABLE_TIER ? GRID_TIERS[st.tier+1] : null;
   const cooking = st.craftings.filter(c=>!c.ready).length;
   const ready = st.craftings.filter(c=>c.ready).length;
@@ -4161,7 +4161,7 @@ function renderStation(st, i){
       <button onclick="upgradeStation(${i})" ${st.tier>=MAX_TABLE_TIER?'disabled':(canUpgrade?'':'disabled')}>
         ${st.tier>=MAX_TABLE_TIER? 'Max size' : 'Upgrade to '+nextDims[0]+'&times;'+nextDims[1]+' ('+upCost.toLocaleString()+'g)'}
       </button>
-      ${st.tier<MAX_TABLE_TIER? `<button onclick="upgradeStationGems(${i})" ${canUpgradeGems?'':'disabled'}>${gemCost.toLocaleString()} forge marks</button>` : ''}
+      ${st.tier<MAX_TABLE_TIER? `<button onclick="upgradeStationMarks(${i})" ${canUpgradeMarks?'':'disabled'}>${markCost.toLocaleString()} forge marks</button>` : ''}
     </div>
   </div>`;
 }
@@ -4351,7 +4351,7 @@ function renderExpeditionResultPopup(){
       <div class="newSwordName">${result.party}</div>
       <div class="newSwordMeta">${tier.label} tier</div>
       <div style="font:400 30px/1.2 var(--font-heading);color:var(--gold);text-align:center;margin:10px 0;">
-        +${result.goldReward.toLocaleString()} gold${result.gemsReward? ' &middot; +'+result.gemsReward+' forge marks' : ''}
+        +${result.goldReward.toLocaleString()} gold${result.marksReward? ' &middot; +'+result.marksReward+' forge marks' : ''}
       </div>
       ${(result.repReward||0)>0? `<div class="small" style="text-align:center;color:var(--accent);margin-bottom:6px;">+${result.repReward} reputation</div>` : ''}
       <div class="small" style="text-align:center;margin-bottom:14px;">
@@ -4747,7 +4747,7 @@ function renderDebug(){
       <button onclick="toggleDebug()">${state.debugOpen?'Hide':'Show'}</button>
     </div>
     ${state.debugOpen? `
-    <div class="small" style="margin:8px 0;">Gold: <b>${state.gold.toLocaleString()}</b><br>Forge Marks: <b>${state.gems.toLocaleString()}</b><br>Reputation: <b>${state.exp}</b> / ${expToNext(state.level)} (Lvl ${state.level})</div>
+    <div class="small" style="margin:8px 0;">Gold: <b>${state.gold.toLocaleString()}</b><br>Forge Marks: <b>${state.marks.toLocaleString()}</b><br>Reputation: <b>${state.exp}</b> / ${expToNext(state.level)} (Lvl ${state.level})</div>
     <div class="row" style="gap:6px;margin-bottom:6px;">
       <button onclick="debugAddGold(100)">+100g</button>
       <button onclick="debugAddGold(1000)">+1000g</button>
@@ -4757,11 +4757,11 @@ function renderDebug(){
       <button onclick="debugAddGold(-1000)">-1000g</button>
     </div>
     <div class="row" style="gap:6px;margin-bottom:6px;">
-      <button onclick="debugAddGems(50)">+50 forge marks</button>
-      <button onclick="debugAddGems(500)">+500 forge marks</button>
+      <button onclick="debugAddMarks(50)">+50 forge marks</button>
+      <button onclick="debugAddMarks(500)">+500 forge marks</button>
     </div>
     <div class="row" style="gap:6px;margin-bottom:6px;">
-      <button onclick="debugAddGems(-50)">-50 forge marks</button>
+      <button onclick="debugAddMarks(-50)">-50 forge marks</button>
     </div>
     <div class="row" style="gap:6px;margin-bottom:6px;">
       <button onclick="debugAddRep(10)">+10 rep</button>
@@ -4951,7 +4951,7 @@ function renderAchievementsModal(){
         <span style="font-size:22px;">${a.icon}</span>
         <div>
           <div style="font-weight:700;">${a.name}</div>
-          <div class="small">${a.desc} &middot; +${ACHIEVEMENT_GEM_REWARD} forge marks</div>
+          <div class="small">${a.desc} &middot; +${ACHIEVEMENT_MARK_REWARD} forge marks</div>
         </div>
       </div>
       <span style="font-size:18px;">${done?'✅':'🔒'}</span>
@@ -4979,7 +4979,7 @@ function renderWheelModal(){
   const icons = wedges.map(w=>{
     const centerDeg = (w.start+w.end)/2/100*360;
     const iconHtml = w.seg.kind==='hammer' ? '<img src="'+HAMMER_ICON[w.seg.hammerId]+'" alt="'+w.seg.label+'">'
-      : w.seg.kind==='gems' ? '&#128142;' : w.seg.kind==='ore' ? '&#9935;&#65039;' : '<img src="'+GOLD_ICON+'" alt="Gold">';
+      : w.seg.kind==='marks' ? '&#128142;' : w.seg.kind==='ore' ? '&#9935;&#65039;' : '<img src="'+GOLD_ICON+'" alt="Gold">';
     return '<div class="wheelWedgeIcon" style="transform:translate(-50%,-50%) rotate('+centerDeg+'deg) translateY(-'+iconRadius+'px);">'+iconHtml+'</div>';
   }).join('');
   const resultSeg = !state.wheelSpinning && state.wheelResultSegId ? WHEEL_SEGMENTS.find(s=>s.id===state.wheelResultSegId) : null;
@@ -5035,7 +5035,7 @@ function dailyRewardStripHtml(day){
     // Future/past ore days show a generic "N ore" here — which specific
     // material it'll be isn't decided until that day's own popup rolls it
     // (see checkDailyLogin()), so there's nothing more specific to show yet.
-    const label = r.gold ? r.gold+'g' : r.gems ? r.gems+'♦' : r.ore+' ore';
+    const label = r.gold ? r.gold+'g' : r.marks ? r.marks+'♦' : r.ore+' ore';
     return `<div class="dailyStripDay ${cls}"><span class="small">Day ${d}</span><span class="dailyStripAmt">${label}</span></div>`;
   }).join('')}</div>`;
 }
@@ -5045,7 +5045,7 @@ function renderDailyRewardPopup(){
   const reward = DAILY_LOGIN_REWARDS[popup.day-1];
   let rewardArt = '', rewardText;
   if(reward.gold) rewardText = '+'+reward.gold+' gold';
-  else if(reward.gems) rewardText = '+'+reward.gems+' forge marks';
+  else if(reward.marks) rewardText = '+'+reward.marks+' forge marks';
   else {
     rewardText = '+'+reward.ore+' '+matById(popup.oreId).name+' ore';
     rewardArt = `<img src="${INGOT_ICON[popup.oreId]}" alt="${matById(popup.oreId).name}" style="width:48px;height:48px;object-fit:contain;">`;
@@ -5267,7 +5267,7 @@ function renderShopSidebar(){
   <div class="panel" style="margin-top:14px;">
     <div class="section-title">Wallet</div>
     <div class="row" style="justify-content:space-between;"><span class="small">Gold</span><b>${state.gold.toLocaleString()}</b></div>
-    <div class="row" style="justify-content:space-between;margin-top:4px;"><span class="small">Forge Marks</span><b>${state.gems.toLocaleString()}</b></div>
+    <div class="row" style="justify-content:space-between;margin-top:4px;"><span class="small">Forge Marks</span><b>${state.marks.toLocaleString()}</b></div>
   </div>
   ${nextLocked? `<div class="panel" style="margin-top:14px;">
     <div class="section-title">Next unlock</div>
@@ -5386,11 +5386,11 @@ window.debugForceLevelUp = debugForceLevelUp;
 window.debugAddHammer = debugAddHammer;
 window.debugResetGame = debugResetGame;
 window.upgradeStation = upgradeStation;
-window.upgradeStationGems = upgradeStationGems;
+window.upgradeStationMarks = upgradeStationMarks;
 window.unlockStation = unlockStation;
-window.buyStationGems = buyStationGems;
-window.buyHammerGems = buyHammerGems;
-window.debugAddGems = debugAddGems;
+window.buyStationMarks = buyStationMarks;
+window.buyHammerMarks = buyHammerMarks;
+window.debugAddMarks = debugAddMarks;
 window.scrapSword = scrapSword;
 window.fulfillOrder = fulfillOrder;
 window.skipOrder = skipOrder;
