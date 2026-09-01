@@ -1267,6 +1267,43 @@ function copyFriendCode(){
   );
 }
 
+// Blocklist for validateUsername() below — lowercase, alpha-only entries,
+// checked against a normalized (leetspeak-collapsed) form of the input so
+// "n1gger"/"f4g"-style substitutions don't slip past a plain substring
+// check. This is a blocklist, not a perfect filter: it catches the common,
+// obvious cases, not every possible evasion — extend it here if a new one
+// gets reported.
+const USERNAME_BLOCKLIST = [
+  'nigger','nigga','chink','spic','kike','gook','wetback','beaner',
+  'towelhead','raghead','paki','coon','jigaboo','sandnigger',
+  'faggot','fag','dyke','tranny',
+  'retard','retarded','spastic',
+  'cunt'
+];
+function normalizeForSlurCheck(name){
+  return name
+    .toLowerCase()
+    .replace(/0/g,'o').replace(/1/g,'i').replace(/3/g,'e')
+    .replace(/4/g,'a').replace(/5/g,'s').replace(/7/g,'t')
+    .replace(/[^a-z]/g,''); // strip spaces/leftover digits/punctuation
+}
+// Shared by saveUsername() and anywhere else a display name needs checking
+// (e.g. a future rename flow). Rules per the ClickUp "add name rules" task:
+// 3-15 characters, letters/numbers/spaces only (no special characters or
+// emoji), no known slur. Returns {ok:true, name} with the trimmed name, or
+// {ok:false, error} with a toast-ready message.
+function validateUsername(raw){
+  const name = (raw||'').trim();
+  if(name.length < 3) return {ok:false, error:'Name must be at least 3 characters.'};
+  if(name.length > 15) return {ok:false, error:'Name must be 15 characters or fewer.'};
+  if(!/^[A-Za-z0-9 ]+$/.test(name)) return {ok:false, error:'Letters, numbers, and spaces only — no special characters.'};
+  const normalized = normalizeForSlurCheck(name);
+  if(USERNAME_BLOCKLIST.some(bad=>normalized.includes(bad))){
+    return {ok:false, error:'That name isn\'t allowed.'};
+  }
+  return {ok:true, name};
+}
+
 // One-time, non-editable — there's no "change username" button anywhere on
 // purpose (see renderUsernamePromptModal()). Saved into the SAME
 // localStorage object as the rest of the friend identity (playerId/
@@ -1274,15 +1311,15 @@ function copyFriendCode(){
 // fact about the same identity, not a second thing to keep in sync.
 function saveUsername(){
   const input = document.getElementById('usernameInput');
-  const name = (input.value||'').trim().slice(0, 24);
+  const result = validateUsername(input.value);
   // render() on both early-outs too — same "toast set but never painted"
   // bug fixed across the other friends functions.
-  if(!name){ setToast('Enter a name first.'); render(); return; }
+  if(!result.ok){ setToast(result.error); render(); return; }
   const identity = loadFriendIdentity();
   if(!identity) return; // shouldn't be reachable — this modal only opens once identity exists
-  identity.username = name;
+  identity.username = result.name;
   saveFriendIdentity(identity);
-  state.username = name;
+  state.username = result.name;
   state.usernamePromptOpen = false;
   syncStationSnapshot(); // push the real name out immediately, don't wait for the next interval tick
   render();
@@ -4560,9 +4597,9 @@ function renderUsernamePromptModal(){
   return `<div class="modalBackdrop">
     <div class="modalCard" onclick="event.stopPropagation()">
       <h3 class="section-title" style="margin:0 0 8px;">Choose your name</h3>
-      <div class="small" style="margin-bottom:14px;">This is what friends will see when they visit you &mdash; pick carefully, it can't be changed later.</div>
+      <div class="small" style="margin-bottom:14px;">This is what friends will see when they visit you &mdash; pick carefully, it can't be changed later. 3-15 characters, letters/numbers/spaces only.</div>
       <div class="row">
-        <input id="usernameInput" type="text" maxlength="24" placeholder="Your name" autofocus
+        <input id="usernameInput" type="text" maxlength="15" placeholder="Your name" autofocus
           style="flex:1;background:rgba(32,30,29,.04);color:var(--text);border:1.5px solid var(--border);border-radius:999px;padding:8px 14px;font-size:12px;"
           onkeydown="if(event.key==='Enter') saveUsername();">
         <button class="primary" onclick="saveUsername()">Save</button>
