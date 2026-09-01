@@ -983,6 +983,13 @@ function loadFriendIdentity(){
 function saveFriendIdentity(identity){
   try{ localStorage.setItem(FRIEND_IDENTITY_KEY, JSON.stringify(identity)); }catch(e){}
 }
+// Used only when the server no longer recognizes this identity at all
+// (see registerOrLoadFriendIdentity()'s 401-recovery path) — that's the
+// one case where deliberately losing a friend code/secret is correct.
+// Don't reach for this anywhere else.
+function clearFriendIdentity(){
+  try{ localStorage.removeItem(FRIEND_IDENTITY_KEY); }catch(e){}
+}
 
 // Remembers every hammer hit this install has SENT to a friend's craft, so
 // hitting Refresh (or leaving and revisiting) can't be used to hammer the
@@ -1039,6 +1046,24 @@ async function registerOrLoadFriendIdentity(){
     if(!state.username) state.usernamePromptOpen = true;
     startFriendBackendLoop();
     render();
+    // Validated AFTER already rendering as 'ready' above (optimistic —
+    // this is the overwhelmingly common case) rather than blocking on it.
+    // Catches a real bug this shipped with: if the server no longer
+    // recognizes this secret at all (its database got reset independently
+    // of this install — confirmed happening at least once, see
+    // SESSION_NOTES.md), every authenticated call just 401s forever,
+    // which used to be misreported as "can't reach the friends server"
+    // with no way out short of manually clearing localStorage. Re-running
+    // this same function with the dead identity cleared falls straight
+    // into the fresh-registration branch below.
+    try{
+      const check = await fetch(FRIENDS_API_BASE+'/api/friends/requests', { headers: friendAuthHeaders() });
+      if(check.status===401){
+        clearFriendIdentity();
+        setToast('Your friend identity needed to be reset — you have a new friend code now.');
+        return registerOrLoadFriendIdentity();
+      }
+    }catch(e){ /* a real network hiccup here isn't grounds to reset a perfectly good identity */ }
     return;
   }
   state.friendStatus = 'connecting';
