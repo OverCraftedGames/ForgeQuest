@@ -440,12 +440,117 @@
   .friendVisitModal{
     width:min(900px,92vw);height:min(680px,86vh);
     background:#f5ead8;border:1.5px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);
-    padding:24px;overflow-y:auto;position:relative;
+    padding:24px;position:relative;
+    /* No scroll -- the content area below is scaled DOWN to fit instead
+       (see fitFriendVisitContent()), never clipped or scrollable. Column
+       flex so the header stays its natural size and the scale area gets
+       exactly whatever's left. */
+    display:flex;flex-direction:column;overflow:hidden;
   }
-  /* Friend's grid is read-only (no ore palette, no fire/upgrade UI) but
-     otherwise reuses .station/.craftGridWrap's real look — see
-     renderFriendStationGrid(). */
-  .friendStationCard{margin-bottom:18px;}
+  /* justify-content:center, not the wider "stretch the content to
+     100/scale% width then scale it back down" trick this started with —
+     that changed the grid's own layout width DURING measurement, which
+     changed how its content reflowed, which made the height used to
+     compute the scale wrong (confirmed wrong in testing, not theoretical).
+     Never touching width at all sidesteps that class of bug entirely; the
+     tradeoff is the shrunk content is centered with empty space on the
+     sides rather than stretched to fill them, which reads fine for a
+     crafting grid (same idea as object-fit:contain on an image). */
+  /* align-items:flex-start is the important one here, not just
+     justify-content -- flex's DEFAULT cross-axis alignment is stretch,
+     which was silently forcing the content child to the container's own
+     height (making every "is it too tall" measurement trivially false,
+     so no scale ever got applied and overflow:hidden just clipped
+     whatever didn't fit — confirmed happening, not theoretical). Letting
+     it size to its own natural content is the whole point. */
+  .friendVisitScaleArea{flex:1;min-height:0;position:relative;overflow:hidden;display:flex;justify-content:center;align-items:flex-start;}
+  /* flex-shrink:0 all the way down this chain (here, .friendStationsRow's
+     children below) is deliberate and load-bearing, not decoration — two
+     earlier attempts both let some CSS layout algorithm reflow this
+     content to fit the modal instead of purely scaling it, and both broke
+     for a different reason:
+       1. .craftGridWrap's grid columns used to be `1fr`. Under
+          flex-wrap:wrap, the browser has to run a real "how would this
+          look at infinite width" pass to decide where to wrap, and `1fr`
+          has no definite width to resolve against during that pass — it
+          fell back to the real ingot PNGs' own intrinsic pixel size per
+          column, blowing one table out past 1500px (confirmed, not
+          hypothetical).
+       2. Switching to flex-wrap:nowrap (still `1fr` columns) traded that
+          for the opposite failure: ordinary flex-shrink, combined with
+          .station's own min-width:0 (added for a different, unrelated
+          reason — see its own comment), was free to crush both tables
+          far below their content's real minimum size. A shrunk grid cell
+          doesn't just get smaller, it RE-WRAPS its content (hammer button
+          labels wrapping mid-word, readyActions/cookProgress overlays
+          overflowing their 1-row span into each other) — confirmed with
+          real friend data, not a synthetic test: two tables' worth of
+          text visually merged into unreadable overlapping garble.
+     The actual fix is upstream, in renderFriendStationGrid(): the grid's
+     columns/rows are now fixed px, not `1fr` (see its own comment) — a
+     fully deterministic size that never depends on the container's width
+     at all, so neither failure mode above can happen regardless of what
+     flex does around it. flex-shrink:0 here just makes that explicit and
+     enforced at every level, so the ONLY thing that ever makes this
+     content smaller is fitFriendVisitContent()'s transform:scale() — a
+     pure visual shrink that scales text/buttons/icons all together in
+     proportion, never a reflow that can wrap or overlap them. */
+  .friendVisitScaleContent{transform-origin:top center;flex-shrink:0;}
+  /* Multiple tables sit side by side (not stacked) so a business with
+     several stations reads as one wide workshop instead of a long list of
+     separate cards. flex-wrap:wrap is a defensive fallback for a
+     hypothetically larger table count (a player is hard-capped at 2 today,
+     see TABLE2_CONFIG) — safe now that every child below is flex-shrink:0
+     with a fixed, deterministic size (see this rule's own comment above),
+     unlike when this row's children were still `1fr`-sized. */
+  .friendStationsRow{display:flex;flex-wrap:wrap;gap:18px;justify-content:center;align-items:flex-start;}
+  /* flex-shrink:0 — see .friendVisitScaleContent's comment above for why
+     nothing in this chain is allowed to be CSS-shrunk/reflowed. Otherwise
+     reuses .station/.craftGridWrap's real look (read-only: no ore palette,
+     no fire/upgrade UI) — see renderFriendStationGrid(). */
+  .friendStationCard{flex-shrink:0;}
+  /* Scoped to .friendStationCard specifically, NOT the shared .readyActions/
+     .cookProgress/.row/button rules the real in-tab Workshop grid also uses
+     (its own cell size at every grid tier is unknown territory this fix has
+     no business touching). Direct measurement showed the hammer-button row
+     (".row" inside ".readyActions") rendering at ~88px wide even though its
+     one button's real content only needs ~138px and the readyActions box
+     around it has ~190px to give — .readyActions is a COLUMN flex container
+     with align-items:center, so .row is sized by "fit-content" on the CROSS
+     axis, and that computation was landing well short of the real available
+     space for reasons that didn't resolve cleanly even after instrumenting
+     the actual computed styles at every level of the chain (confirmed by
+     measurement, not assumed). white-space:nowrap alone did NOT fix it —
+     .row's own width stayed ~88px regardless, so the button's line still
+     had nowhere to go. width:max-content on .row forces it to just be as
+     wide as its own content needs, sidestepping whatever the cross-axis
+     fit-content math was getting wrong — that's what actually fixes the
+     shrink. white-space:nowrap on the label/button is a second, independent
+     guarantee that neither one wraps even if some other width pressure
+     shows up later; on its own it does NOT fix .row shrinking. Safe here specifically
+     because every ancestor in this card's chain is already flex-shrink:0 at
+     a fixed, generous size (see .friendVisitScaleContent's comment) with
+     room to spare, unlike the base game's grid where a small tier's actual
+     cell size is untested against this. */
+  .friendStationCard .readyActions .row,
+  .friendStationCard .cookProgress .row{width:max-content;max-width:100%;}
+  /* NOT nowrap on the label — a 2-cell craft's fusion pair can be
+     horizontal (wide, short box: renderFriendStationGrid()'s spanOf()
+     gives it ~280px width, 140px height) OR VERTICAL (narrow, tall box:
+     ~140px width, ~280px height — see gridPairs()'s own comment: "same row
+     or same column" are both valid). Forcing nowrap here was tuned only
+     against horizontal-pair test data — for a real vertical pair, the box
+     is only ~140px wide and "Ready — give it a hammer hit" genuinely can't
+     fit on one line at any reasonable font size, so nowrap just pushed the
+     overflow sideways into the NEXT craft's box instead of preventing it
+     (confirmed against real friend data, not a synthetic test — every
+     previous test case here only ever used horizontal pairs). Letting it
+     wrap normally is correct for both shapes: a horizontal box has ~264px
+     of usable width (comfortably one line, see cellPx's own comment for
+     the math), and a vertical box's extra height (280px+) has plenty of
+     room to hold 2-3 wrapped lines without overflowing. */
+  .friendStationCard .readyActions button,
+  .friendStationCard .cookProgress button{white-space:nowrap;}
   .catalogModal{
     display:grid;grid-template-columns:340px 1fr;width:min(1100px,92vw);height:min(640px,86vh);
     background:#f5ead8;border:1.5px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);overflow:hidden;
@@ -974,21 +1079,89 @@ const JEAN_CLODE_ID = 'jean-clode';
 const FRIENDS_API_BASE = 'http://friends.ocgames.xyz:12832';
 const FRIEND_IDENTITY_KEY = 'forgequest_friend_identity_v1';
 
-function loadFriendIdentity(){
+// Same file-backed-vs-localStorage split as the main save (see
+// bootLoadComplete's comment and readSaveFile/writeSaveFile above) — and
+// for the exact same reason: this identity (playerId/friendCode/
+// authSecret/username) was ORIGINALLY left in plain localStorage even
+// after the main save moved off it, on the assumption it changes rarely
+// enough not to matter. Confirmed wrong — the same WebView2 localStorage
+// unreliability that lost real save progress also loses this, and it's
+// arguably worse when it does: rather than just looking like a fresh
+// save, it silently mints a BRAND NEW backend identity (new friend code,
+// existing friends can no longer find you, username prompt every launch).
+// Kept as a small in-memory cache (populated once at boot by
+// initFriendIdentityCache(), awaited before registerOrLoadFriendIdentity()
+// runs) rather than making loadFriendIdentity() itself async, since it's
+// called synchronously from ~10 call sites via friendAuthHeaders() and
+// converting all of them was unnecessary risk for no benefit — the cache
+// is filled long before any of them can run.
+let usingFileBasedFriendIdentity = null;
+let cachedFriendIdentity = null;
+async function readFriendIdentityFile(){
   try{
-    const raw = localStorage.getItem(FRIEND_IDENTITY_KEY);
-    return raw ? JSON.parse(raw) : null;
-  }catch(e){ return null; }
+    const res = await fetch('/api/friend-identity', {cache:'no-store'});
+    if(!res.ok) return {available:false, exists:false, raw:null};
+    const body = await res.json();
+    return {available:true, exists:!!body.exists, raw: body.exists ? body.data : null};
+  }catch(e){ return {available:false, exists:false, raw:null}; }
+}
+async function writeFriendIdentityFile(raw){
+  try{
+    const res = await fetch('/api/friend-identity', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({data: raw})});
+    return res.ok;
+  }catch(e){ return false; }
+}
+async function deleteFriendIdentityFile(){
+  try{ await fetch('/api/friend-identity', {method:'DELETE'}); }catch(e){}
+}
+// Must be awaited before anything reads loadFriendIdentity() for real —
+// see this block's own comment above. Mirrors loadGame()'s migration path:
+// on this platform's first-ever launch since this fix shipped, the file
+// won't exist yet but a real identity may already be sitting in legacy
+// localStorage (from before this fix) — pull it over once rather than
+// orphaning it and minting a second, different identity.
+async function initFriendIdentityCache(){
+  const fileResult = await readFriendIdentityFile();
+  usingFileBasedFriendIdentity = fileResult.available;
+  let raw = null;
+  if(fileResult.available){
+    raw = fileResult.raw;
+    if(!fileResult.exists){
+      let legacyRaw = null;
+      try{ legacyRaw = localStorage.getItem(FRIEND_IDENTITY_KEY); }catch(e){}
+      if(legacyRaw){
+        raw = legacyRaw;
+        await writeFriendIdentityFile(legacyRaw);
+      }
+    }
+  } else {
+    try{ raw = localStorage.getItem(FRIEND_IDENTITY_KEY); }catch(e){ raw = null; }
+  }
+  try{ cachedFriendIdentity = raw ? JSON.parse(raw) : null; }catch(e){ cachedFriendIdentity = null; }
+}
+function loadFriendIdentity(){
+  return cachedFriendIdentity;
 }
 function saveFriendIdentity(identity){
-  try{ localStorage.setItem(FRIEND_IDENTITY_KEY, JSON.stringify(identity)); }catch(e){}
+  cachedFriendIdentity = identity; // update the cache synchronously so friendAuthHeaders() reflects it immediately
+  const raw = JSON.stringify(identity);
+  if(usingFileBasedFriendIdentity){
+    writeFriendIdentityFile(raw); // fire-and-forget, same as every other caller of saveFriendIdentity() never awaited this before
+  } else {
+    try{ localStorage.setItem(FRIEND_IDENTITY_KEY, raw); }catch(e){}
+  }
 }
 // Used only when the server no longer recognizes this identity at all
 // (see registerOrLoadFriendIdentity()'s 401-recovery path) — that's the
 // one case where deliberately losing a friend code/secret is correct.
 // Don't reach for this anywhere else.
 function clearFriendIdentity(){
-  try{ localStorage.removeItem(FRIEND_IDENTITY_KEY); }catch(e){}
+  cachedFriendIdentity = null;
+  if(usingFileBasedFriendIdentity){
+    deleteFriendIdentityFile();
+  } else {
+    try{ localStorage.removeItem(FRIEND_IDENTITY_KEY); }catch(e){}
+  }
 }
 
 // Remembers every hammer hit this install has SENT to a friend's craft, so
@@ -1258,11 +1431,16 @@ async function checkFriendPendingHits(){
 }
 
 // Its own slower interval, deliberately NOT part of the 1s tick loop below
-// — these two hit the network, and this game's backend traffic should stay
+// — these hit the network, and this game's backend traffic should stay
 // "occasional small JSON", not once a second per player. Both functions
 // already no-op until friendStatus is 'ready', so calling this before
 // identity resolves (or if it never does) is harmless.
-const FRIEND_SYNC_INTERVAL_MS = 90*1000;
+//
+// 15s, not the original 90s — shrinks (but, on its own, can't fully close;
+// see collectSword()'s own pre-collect check for that) the window where a
+// friend's hammer hit could arrive for a craft you've already collected,
+// getting silently dropped since there's nothing left to apply it to.
+const FRIEND_SYNC_INTERVAL_MS = 15*1000;
 let friendBackendLoopStarted = false;
 function startFriendBackendLoop(){
   syncStationSnapshot();
@@ -1465,16 +1643,172 @@ let isResetting = false; // set by debugResetGame() so the pagehide/visibilitych
 // safety-net save (see below) can't silently re-write the save it just cleared
 // while the reload is in flight — without this, "Reset game" looked like it worked
 // (fresh screen) but the old save was actually still on disk underneath it.
-function saveGame(){
-  if(isResetting) return;
+// Backstop against exactly the failure loadGameWithRetry() is meant to
+// prevent (see its own comment) — belt-and-suspenders, not a replacement for
+// it: the retry closes the race at its source, this refuses the single most
+// damaging POSSIBLE consequence if some other, not-yet-seen path ever leaves
+// `state` looking freshly-defaulted while a real save still exists on disk.
+// Confirmed happening in the field once already (a real player's save, real
+// progress, overwritten down to the exact starting state) before the retry
+// fix existed — worth keeping even now that the likely root cause is
+// patched, since "silently destroy real progress" is bad enough to defend
+// in depth rather than trust a single fix to be the whole story.
+// Matches the EXACT untouched new-game starting values (see `const state`'s
+// own level:1/gold:600/gems:0/ores defaults) — deliberately an exact
+// fingerprint, not a fuzzy byte-size comparison. An earlier version of this
+// tried "new save is under half the size of the existing one" as a
+// pre-filter, which was WRONG — checked against the actual real-world
+// incident numbers (2722 bytes real save vs 1799 bytes corrupted-to-default
+// save is a 66% ratio, past a 50% cutoff) and it would have let the exact
+// case this exists to catch slip through. The field-value fingerprint alone
+// is already about as specific as a check can be: reaching this exact
+// combination — zero exp spent, the precise starting gold/gems/ore counts,
+// an empty catalog, zero friends — is essentially impossible for any real
+// session that has actually done anything, so there's no need to also
+// gate on size.
+// An exact "untouched new-game defaults" fingerprint (level 1, 600 gold,
+// empty catalog, etc.) was the FIRST version of this check, and it had a
+// real gap, confirmed happening: it only catches a save that's STILL
+// exactly untouched. The actual failure mode is a boot that incorrectly
+// defaults `state`, followed by the PLAYER doing a little bit of anything
+// at all before the once-a-second autosave fires — one ore bought, one
+// click — which nudges some field off the exact default values while the
+// save is still catastrophically behind the real one on disk. That's
+// still very much a real save about to be destroyed; the exact-fingerprint
+// check just stops seeing it as one.
+// countCatalogEntries/isRegression instead compare against fields that are
+// structurally ONE-WAY in this game's own rules — nothing in this codebase
+// ever un-discovers a sword, revokes an achievement, or decrements a
+// sequence counter or business level. A new save with FEWER of any of
+// these than what's already on disk is, structurally, not "different
+// progress" — it can only mean the incoming save doesn't know about
+// progress the existing one does, which is exactly the signal worth
+// blocking on. (Friends are deliberately NOT part of this check — unlike
+// the others, removing a friend is a real, legitimate player action, so a
+// decrease there alone doesn't prove anything is wrong.)
+function countCatalogEntries(d){
+  return Object.values(d.catalog||{}).reduce((sum,arr)=>sum+(arr?arr.length:0), 0);
+}
+function isRegression(newData, existingData){
+  if(countCatalogEntries(newData) < countCatalogEntries(existingData)) return true;
+  if((newData.unlockedAchievements||[]).length < (existingData.unlockedAchievements||[]).length) return true;
+  if((newData.level||1) < (existingData.level||1)) return true;
+  const seqFields = ['sword','order','craft','expedition'];
+  const newSeqs = newData.seqs||{}, exSeqs = existingData.seqs||{};
+  if(seqFields.some(f => (newSeqs[f]||0) < (exSeqs[f]||0))) return true;
+  return false;
+}
+function looksSuspiciouslyFreshCompared(newJson, existingRaw){
+  if(!existingRaw) return false; // nothing to protect — a genuinely fresh save is fine
   try{
-    localStorage.setItem(SAVE_KEY, JSON.stringify(serializeState()));
+    return isRegression(JSON.parse(newJson), JSON.parse(existingRaw));
+  }catch(e){ return false; } // malformed existing data isn't something worth blocking on — let the write through
+}
+// Real save persistence goes through the desktop app's own /api/save
+// endpoint when it's available — a plain JSON file on disk, written by the
+// C# host with an atomic replace (see MainForm.cs's HandleSaveApi() for the
+// full story) — NOT WebView2/Chromium's own localStorage, which this file
+// has now caused two separate, confirmed, real data-loss incidents through:
+// a cold-storage read race at boot, and a save reverting to an OLDER
+// checkpoint after some WebView2 processes were forcefully terminated.
+// Both were upstream of anything achievable in this file's own JS. A plain
+// file this app writes itself sidesteps that whole storage engine.
+// usingFileBasedSave starts `null` (not yet determined) and is set by the
+// first loadGameWithRetry() call at boot; every later saveGame()/clearSave()
+// call reuses that same answer rather than re-probing every time.
+let usingFileBasedSave = null;
+// Cache of the last known raw save string — used ONLY as a fallback for the
+// looksSuspiciouslyFreshCompared() backstop when a fresh disk read isn't
+// available (localStorage mode, where reads are synchronous and cheap
+// enough to just do directly instead — see saveGame() below). In
+// file-based mode, saveGame() always re-reads the actual current file
+// fresh rather than trusting this cache — a real incident showed why: if
+// the very first boot-time read ever comes back empty for ANY reason
+// (a race, a transient hiccup), this cache would be stuck at a falsy value
+// for the rest of the session, and looksSuspiciouslyFreshCompared() treats
+// "nothing to compare against" as "nothing to protect" — silently
+// disabling the one safeguard that exists specifically to prevent
+// autosave from destroying a real save that's still sitting right there
+// on disk. Re-reading fresh every save closes that hole completely: it
+// doesn't matter whether the cache is stale or was never populated, only
+// what's actually on disk RIGHT NOW.
+let lastKnownRawSave = null;
+// Set true only once loadGameWithRetry() has FULLY finished — including
+// field application, not just deciding usingFileBasedSave — see saveGame()'s
+// own check of this flag for why: the once-a-second autosave interval (see
+// its own setInterval, registered early in the script, well before the
+// async boot IIFE at the bottom completes) can fire WHILE loadGame() is
+// still mid-flight, specifically during the migration path's real `await
+// writeSaveFile(...)` — usingFileBasedSave gets set to `true` BEFORE that
+// await, but `state` hasn't had the real save's fields applied to it yet.
+// If the interval's own saveGame() call happens to land in that exact
+// window, it serializes the STILL-DEFAULT `state` and writes THAT to the
+// file — a race that can beat the real load humans never see coming,
+// because by the time anyone looks, it's already "boot showed defaults,
+// autosave then wrote defaults" and looks identical to no bug at all having
+// ever been there. This flag closes it outright: nothing may save until
+// boot is completely done, meaningfully or not.
+let bootLoadComplete = false;
+async function readSaveFile(){
+  try{
+    const res = await fetch('/api/save', {cache:'no-store'});
+    // 404 here means this platform doesn't serve /api/save at all
+    // (Android/Capacitor, or a plain dev static server) — NOT "no save
+    // file". exists:false (a real 200 response) is the only way to know
+    // for certain that the file genuinely doesn't exist yet.
+    if(!res.ok) return {available:false, exists:false, raw:null};
+    const body = await res.json();
+    return {available:true, exists:!!body.exists, raw: body.exists ? body.data : null};
+  }catch(e){ return {available:false, exists:false, raw:null}; }
+}
+async function writeSaveFile(raw){
+  try{
+    const res = await fetch('/api/save', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({data: raw})});
+    return res.ok;
+  }catch(e){ return false; }
+}
+async function deleteSaveFile(){
+  try{ await fetch('/api/save', {method:'DELETE'}); }catch(e){}
+}
+async function saveGame(){
+  if(isResetting) return;
+  // See bootLoadComplete's own comment — refusing to save at all until the
+  // initial load has FULLY finished (not just decided which backend to use)
+  // closes a real race between this function and loadGame()'s migration
+  // path, confirmed as the likely explanation for real, repeated data loss.
+  if(!bootLoadComplete) return;
+  try{
+    const json = JSON.stringify(serializeState());
+    // Always check against what's ACTUALLY on disk right now in file-based
+    // mode — see lastKnownRawSave's own comment for why trusting a cached
+    // value here specifically is the mistake that let a real save get
+    // destroyed once already, even with this exact backstop in place.
+    let existingRaw = lastKnownRawSave;
+    if(usingFileBasedSave){
+      const current = await readSaveFile();
+      // Only trust this fresh read if the endpoint actually answered —
+      // NOT on a transient failure, which would wrongly look like "nothing
+      // exists" and defeat the whole point of checking fresh at all.
+      if(current.available) existingRaw = current.raw;
+    }
+    if(looksSuspiciouslyFreshCompared(json, existingRaw)){
+      console.warn('saveGame(): refused to overwrite an existing, substantially larger save with what looks like a fresh-default state — see looksSuspiciouslyFreshCompared().');
+      return;
+    }
+    if(usingFileBasedSave){
+      if(!(await writeSaveFile(json))) return; // don't update the cache/timestamp on a failed write
+    } else {
+      localStorage.setItem(SAVE_KEY, json);
+    }
+    lastKnownRawSave = json;
     state.lastSaveAt = Date.now();
   }catch(e){ /* storage unavailable/full — nothing else we can do here */ }
 }
 
-function clearSave(){
-  try{ localStorage.removeItem(SAVE_KEY); }catch(e){}
+async function clearSave(){
+  lastKnownRawSave = null;
+  if(usingFileBasedSave){ await deleteSaveFile(); }
+  else { try{ localStorage.removeItem(SAVE_KEY); }catch(e){} }
 }
 
 // Applies a completed craft's ready-flag transition, shared by the load-time
@@ -1489,9 +1823,57 @@ function checkCraftCompletions(){
   return any;
 }
 
-function loadGame(){
+async function loadGame(){
   let raw;
-  try{ raw = localStorage.getItem(SAVE_KEY); }catch(e){ return false; }
+  // File-based save API first (see saveGame()'s own comment for the full
+  // story on why). The AVAILABILITY of the endpoint (usingFileBasedSave) is
+  // only ever decided ONCE, the very first time this runs, from `null` —
+  // every later call reuses that same answer rather than re-probing.
+  // Deliberately does NOT let a later call's transient fetch failure flip
+  // an already-confirmed `true` back to `false`: that would silently fall
+  // through to localStorage — a completely different, almost certainly
+  // EMPTY storage backend on this platform — which is exactly the kind of
+  // false "no save" this whole retry mechanism exists to prevent. Once
+  // file-based mode is confirmed, a failed read just means "couldn't read
+  // right now" (raw stays undefined, loadGameWithRetry() gets another
+  // chance), never "give up and check somewhere else."
+  if(usingFileBasedSave===null){
+    const fileResult = await readSaveFile();
+    usingFileBasedSave = fileResult.available;
+    if(fileResult.available){
+      raw = fileResult.raw;
+      // One-time migration: gated on the API's explicit exists:false, NOT
+      // merely "raw came back falsy" — those are NOT the same guarantee,
+      // and confusing them caused a real incident: a transient hiccup on
+      // this exact read (server not fully warmed up yet, same family of
+      // race loadGameWithRetry() exists to survive) made a REAL, EXISTING
+      // save's data come back empty just this once, which this migration
+      // check then "helpfully" papered over by pulling in whatever old,
+      // possibly stale value happened to still be sitting in localStorage
+      // from a previous version — silently overwriting the correct,
+      // already-durable file with a wrong one. exists:false is the API
+      // stating for certain that no file is there at all; that can only
+      // be true once, ever, for a given install (the very first time this
+      // code runs before anything has been written), so gating on it
+      // specifically makes this migration truly one-time and safe.
+      if(fileResult.available && !fileResult.exists){
+        let legacyRaw = null;
+        try{ legacyRaw = localStorage.getItem(SAVE_KEY); }catch(e){}
+        if(legacyRaw){
+          raw = legacyRaw;
+          await writeSaveFile(legacyRaw); // persist it into the new, more durable store immediately
+        }
+      }
+    }
+  } else if(usingFileBasedSave===true){
+    const fileResult = await readSaveFile();
+    if(fileResult.available) raw = fileResult.raw;
+    // else: leave usingFileBasedSave as true, raw stays undefined — a
+    // transient hiccup, not proof the endpoint stopped existing.
+  } else {
+    try{ raw = localStorage.getItem(SAVE_KEY); }catch(e){ return false; }
+  }
+  lastKnownRawSave = raw;
   if(!raw) return false;
   let data;
   try{ data = JSON.parse(raw); }catch(e){ return false; }
@@ -1569,6 +1951,43 @@ function loadGame(){
   }
 }
 
+// A bare, single, synchronous loadGame() call at boot turned out to be
+// dangerous, not just theoretically fragile — confirmed causing REAL,
+// PERMANENT save loss for a real player, not a hypothetical: localStorage is
+// spec'd as synchronous, but the underlying backend (in the desktop build,
+// WebView2/Chromium's Storage Service, reached over IPC) can occasionally
+// still be "cold" on the very FIRST read of a brand-new browser process —
+// confirmed via direct instrumentation, not assumption: the exact same save
+// key, read moments apart by a separate diagnostic tool against the same
+// profile, correctly returned the real save every single time, while the
+// real game's own very-first boot-time read sometimes came back empty. A
+// false "no save" here isn't just a display glitch — line ~2588's
+// once-a-second autosave interval means the very next tick permanently
+// overwrites the real save with this session's now-default state, typically
+// within about a second. This retry exists specifically to close that
+// window: if the very first read looks like "no save", wait briefly and
+// read again before believing it — a real cold-storage race should resolve
+// well within these delays, while a genuinely fresh install just pays a
+// harmless, barely-perceptible extra ~100-400ms before the tutorial shows.
+async function loadGameWithRetry(){
+  if(await loadGame()) return true;
+  // Once usingFileBasedSave is confirmed true, the retry loop below is
+  // belt-and-suspenders for the file API too (a slow disk on first access,
+  // say) rather than dead code — it's no longer ONLY defending against the
+  // localStorage cold-storage race this was originally written for.
+  for(const delayMs of [100, 300, 800]){
+    await new Promise(r=>setTimeout(r, delayMs));
+    if(await loadGame()) return true;
+  }
+  // Exhausting every retry no longer means "risk permanent data loss" the
+  // way it did before saveGame()'s regression check (see
+  // looksSuspiciouslyFreshCompared()) existed — worst case now is this one
+  // launch visually looks fresh while the real save sits protected on
+  // disk, waiting for a load that actually succeeds. Still worth trying
+  // this hard to get it right the first time, for the player's sake.
+  return false;
+}
+
 function expToNext(level){ return level*100; }
 function unlockedMaterials(){ return MATERIALS.filter(m=>m.reqLevel<=state.level); }
 
@@ -1595,7 +2014,7 @@ function toggleSettings(){
 // on the first click.
 function requestResetGameProfile(){ state.settingsResetConfirm = true; render(); }
 function cancelResetGameProfile(){ state.settingsResetConfirm = false; render(); }
-function confirmResetGameProfile(){ isResetting = true; clearSave(); location.reload(); }
+async function confirmResetGameProfile(){ isResetting = true; await clearSave(); location.reload(); }
 function toggleAchievements(){
   state.achievementsOpen = !state.achievementsOpen;
   if(state.achievementsOpen){ state.mineOpen=false; state.catalogOpen=false; state.hammerInventoryOpen=false; state.swordInventoryModalOpen=false; state.tutorialOpen=false; state.settingsOpen=false; state.wheelOpen=false; state.newSwordPopup=null; state.dailyRewardPopup=null; state.expeditionsOpen=false; }
@@ -2398,12 +2817,26 @@ function hammerHit(stationIdx, craftId, hammerId, sourceId){
   render();
 }
 
-function collectSword(stationIdx, craftId){
+// Awaits a pending-hits check FIRST, not just relying on the interval
+// (see FRIEND_SYNC_INTERVAL_MS's comment) — a friend's hammer hit landing
+// AFTER this craft is collected has nothing left to apply to and gets
+// silently dropped (checkFriendPendingHits() already skips a hit whose
+// craft no longer exists, same as it always has for one that's simply
+// gone stale). Shrinking the poll interval only ever shrinks that window;
+// this is what actually closes it for the common case — a deliberate
+// Collect click. Small added latency (one small network round-trip) in
+// exchange for not silently eating a friend's hit is the right trade here.
+async function collectSword(stationIdx, craftId){
+  await checkFriendPendingHits();
+  // Re-read st/c AFTER the await, not before — checkFriendPendingHits()
+  // may have just mutated this exact craft (a hit that arrived in the
+  // nick of time), or even collected/changed things elsewhere; never
+  // trust a reference captured before an await here.
   const st = state.stations[stationIdx];
-  const c = st.craftings.find(x=>x.id===craftId);
+  const c = st && st.craftings.find(x=>x.id===craftId);
   if(!c || !c.ready) return;
   completeCraft(st, craftId);
-  syncStationSnapshot(); // same reasoning as fireCells() — don't leave a friend seeing a long-collected craft as still "ready" for up to 90s
+  syncStationSnapshot(); // same reasoning as fireCells() — don't leave a friend seeing a long-collected craft as still "ready" for up to 15s
   render();
 }
 
@@ -2756,6 +3189,54 @@ function leaveVisit(){ state.visitingFriendId = null; state.visitingFriendData =
 // round-trip just to trigger a new fetch.
 function refreshVisit(){ if(state.visitingFriendId) visitFriend(state.visitingFriendId); }
 
+// Shrinks the visit modal's content to fit .friendVisitScaleArea's real
+// height AND width with NO scrolling, rather than letting a big table (a
+// 4x4 grid full of ready crafts is tall) overflow into a scrollbar — a
+// friend's workshop should read as one complete picture, not something
+// you scroll through. Only ever scales DOWN (a small table just renders
+// at its natural 1:1 size, never blown up to fill extra space) and
+// re-measures on every render while visiting, so it stays correct as
+// content changes (a hammer button disappearing, Refresh pulling in
+// more/less craftings, or now — with .friendStationsRow laying tables out
+// side by side — a friend having enough tables to run wider than the
+// modal).
+function fitFriendVisitContent(){
+  const area = document.querySelector('.friendVisitScaleArea');
+  const content = document.getElementById('friendVisitScaleContent');
+  if(!area || !content) return;
+  // Reset to natural size FIRST — measuring while a previous (possibly
+  // shrunk) transform is still applied would measure the wrong thing.
+  content.style.transform = 'none';
+  const naturalHeight = content.offsetHeight;
+  const naturalWidth = content.offsetWidth;
+  const availableHeight = area.clientHeight;
+  const availableWidth = area.clientWidth;
+  // The ingot icons (INGOT_ICON) are real files, not inlined data URIs
+  // (see MainForm.cs's ServeLoop comment for why) — they load
+  // asynchronously, same as any <img src="..."> pointed at a real file. A
+  // card full of them can easily still be mid-load at this exact
+  // synchronous measurement, understating naturalHeight/naturalWidth and
+  // landing on a scale that's too generous (confirmed happening, not
+  // hypothetical). Re-run once every unloaded image finishes, not just
+  // once synchronously here.
+  const pending = Array.from(content.querySelectorAll('img')).filter(img=>!img.complete);
+  if(pending.length){
+    let remaining = pending.length;
+    pending.forEach(img=>{
+      const onDone = ()=>{ remaining--; if(remaining<=0) fitFriendVisitContent(); };
+      img.addEventListener('load', onDone, {once:true});
+      img.addEventListener('error', onDone, {once:true}); // a broken image shouldn't hang the re-fit forever
+    });
+  }
+  if(naturalHeight===0 || naturalWidth===0 || availableHeight===0 || availableWidth===0) return; // not laid out yet
+  // Whichever axis is tighter drives the scale — a wide row of side-by-side
+  // tables may need to shrink on width alone even if it's short enough on
+  // height (and vice versa for one tall table). Never scale above 1.
+  const scale = Math.min(1, availableHeight/naturalHeight, availableWidth/naturalWidth);
+  if(scale>=1) return; // already fits — nothing to do
+  content.style.transform = 'scale('+scale+')';
+}
+
 // sourceId mirrors hammerHit()'s same param, for the same reason: smith is
 // free/unlimited but capped at one hit per distinct "player" (here, this
 // visitor's own real playerId) rather than one hit total like the other
@@ -3074,7 +3555,7 @@ function debugAddHammer(id, amount){
   state.hammerInventory[id] = Math.max(0, (state.hammerInventory[id]||0)+amount);
   render();
 }
-function debugResetGame(){ isResetting = true; clearSave(); location.reload(); }
+async function debugResetGame(){ isResetting = true; await clearSave(); location.reload(); }
 
 /* ---------- RENDER ---------- */
 
@@ -3780,25 +4261,34 @@ function renderFriendVisitModal(){
       </div>
       <button onclick="refreshVisit()">Refresh</button>
     </div>`;
+  // Every branch below shares this shell — header (natural size) +
+  // .friendVisitScaleArea (fills whatever's left, never scrolls) wrapping
+  // .friendVisitScaleContent (what actually gets measured and scaled down
+  // to fit by fitFriendVisitContent(), called right after this markup
+  // lands in the DOM — see render()).
+  const shell = inner => `<div class="modalBackdrop" onclick="leaveVisit()"><div class="friendVisitModal" onclick="event.stopPropagation()">${header}
+    <div class="friendVisitScaleArea"><div class="friendVisitScaleContent" id="friendVisitScaleContent">${inner}</div></div>
+  </div></div>`;
+
   const data = state.visitingFriendData;
   if(!data || data.loading){
-    return `<div class="modalBackdrop" onclick="leaveVisit()"><div class="friendVisitModal" onclick="event.stopPropagation()">${header}<div class="small" style="margin-top:10px;">Loading their workshop&hellip;</div></div></div>`;
+    return shell(`<div class="small" style="margin-top:10px;">Loading their workshop&hellip;</div>`);
   }
   if(data.error){
-    return `<div class="modalBackdrop" onclick="leaveVisit()"><div class="friendVisitModal" onclick="event.stopPropagation()">${header}<div class="small" style="margin-top:10px;">Couldn't reach the friends server &mdash; try again in a moment.</div></div></div>`;
+    return shell(`<div class="small" style="margin-top:10px;">Couldn't reach the friends server &mdash; try again in a moment.</div>`);
   }
   if(data.notSynced){
-    return `<div class="modalBackdrop" onclick="leaveVisit()"><div class="friendVisitModal" onclick="event.stopPropagation()">${header}<div class="small" style="margin-top:10px;">${label} hasn't opened ForgeQuest since you added them &mdash; nothing to show yet.</div></div></div>`;
+    return shell(`<div class="small" style="margin-top:10px;">${label} hasn't opened ForgeQuest since you added them &mdash; nothing to show yet.</div>`);
   }
   const stations = data.stations||[];
   const sentHits = loadSentFriendHits();
   const stationCards = stations.length
-    ? stations.map(st=>renderFriendStationCard(friend, st, sentHits)).join('')
+    ? `<div class="friendStationsRow">${stations.map(st=>renderFriendStationCard(friend, st, sentHits)).join('')}</div>`
     : `<div class="small">Nothing on their workbench yet.</div>`;
-  return `<div class="modalBackdrop" onclick="leaveVisit()"><div class="friendVisitModal" onclick="event.stopPropagation()">${header}
+  return shell(`
     <div class="small" style="margin:10px 0;">Business level ${data.businessLevel}. Give a ready station a hammer hit using one of your own hammers to help &mdash; you'll get a small thank-you reward.</div>
     ${stationCards}
-  </div></div>`;
+  `);
 }
 
 // Read-only visual twin of renderStation()/renderStationGrid() — same
@@ -3828,10 +4318,36 @@ function renderFriendStationGrid(friend, st, sentHits){
     }
   }
 
+  // Fixed values matching .craftGridWrap's own inline style below (cellPx)
+  // and its stylesheet rule (gap:8px, padding:10px) — see cellPx's own
+  // comment for why this grid uses fixed px sizing at all.
+  const cellPx = 140, cellGap = 8, cellPad = 10;
+  // Pixel math instead of grid-row/grid-column + position:absolute — a
+  // readyActions/cookProgress overlay needs to both SPAN multiple grid
+  // cells AND sit on top of them (z-index), which the real in-tab
+  // Workshop grid (renderStationGrid()) does via `position:absolute` on a
+  // grid item with explicit grid-row/column, relying on the browser
+  // treating that grid AREA as the item's containing block. That's a
+  // real, working pattern there — but here it rendered visibly taller
+  // than its actual 1-row span in the real desktop app's WebView2 engine
+  // (confirmed via the user's own screenshot: a single-line label+button
+  // still rendering inside a box roughly 2 rows tall), something this
+  // environment's own renderer never reproduced even under direct
+  // measurement. Rather than chase a browser-engine discrepancy blind,
+  // computing the overlay's top/left/width/height directly in plain
+  // pixels — relative to .craftGridWrap's own padding box, which is
+  // `position:relative` — sidesteps the "grid area as containing block"
+  // computation entirely. Plain absolute positioning is about as
+  // universally consistent as CSS gets; there's much less room for an
+  // engine to disagree about what a hardcoded top/left/width/height means.
   const spanOf = c=>{
     const minR = Math.min(c.cells[0].r,c.cells[1].r), maxR = Math.max(c.cells[0].r,c.cells[1].r);
     const minC = Math.min(c.cells[0].c,c.cells[1].c), maxC = Math.max(c.cells[0].c,c.cells[1].c);
-    return `grid-row:${minR+1} / ${maxR+2};grid-column:${minC+1} / ${maxC+2};`;
+    const top = cellPad + minR*(cellPx+cellGap);
+    const left = cellPad + minC*(cellPx+cellGap);
+    const width = (maxC-minC+1)*cellPx + (maxC-minC)*cellGap;
+    const height = (maxR-minR+1)*cellPx + (maxR-minR)*cellGap;
+    return `top:${top}px;left:${left}px;right:auto;bottom:auto;width:${width}px;height:${height}px;`;
   };
 
   const cookingHtml = cooking.map(c=>{
@@ -3874,7 +4390,31 @@ function renderFriendStationGrid(friend, st, sentHits){
   }).join('');
 
   const tableBg = CRAFT_TABLE_BG[st.tier];
-  return `<div class="craftGridWrap" style="grid-template-columns:repeat(${cols},1fr);grid-template-rows:repeat(${rows},1fr);background-image:url('${tableBg}');">
+  // Fixed px columns/rows here, NOT the real grid's `1fr` (see renderStationGrid) —
+  // this grid can now sit next to a second one in .friendStationsRow, and `1fr`
+  // resolves against whatever indefinite/shrunk width the flex layout hands it.
+  // That's exactly what broke: `1fr` under flex-wrap's max-content pass fell back
+  // to the ingot PNGs' own huge intrinsic size (see .friendStationsRow's CSS
+  // comment), and under plain flex-shrink (nowrap) it went the OTHER way — two
+  // busy tables' real content (long hammer-button labels, 4x4 of ingots) got
+  // squeezed down under `.station`'s own min-width:0 far enough that button text
+  // wrapped mid-word and the readyActions/cookProgress overlays overflowed their
+  // cell span into each other, visually merging into unreadable overlapping text
+  // (confirmed happening with real friend data, not hypothetical). A fixed px
+  // size makes this grid's true size fully deterministic — never dependent on
+  // the container's width at all — so fitFriendVisitContent()'s transform:scale()
+  // (a pure visual shrink, not a reflow) is the ONLY thing that ever makes this
+  // smaller, which shrinks text/buttons/icons all together in proportion instead
+  // of letting them wrap or overlap.
+  // 140, not 78/100 (see cellPx's own declaration above spanOf) — bumped
+  // twice after direct testing. 78 left the readyActions/cookProgress
+  // overlay text wrapping onto 3 cramped lines; 100 measured as enough
+  // margin in THIS environment's rendering but the user reported it still
+  // wrapping in the real desktop app's WebView2 — most likely the embedded
+  // custom font not resolving identically there. 140 gives real headroom
+  // instead of a razor-thin margin tuned to one specific renderer's exact
+  // text metrics.
+  return `<div class="craftGridWrap" style="grid-template-columns:repeat(${cols},${cellPx}px);grid-template-rows:repeat(${rows},${cellPx}px);background-image:url('${tableBg}');">
     ${cells.join('')}
     ${cookingHtml}
     ${readyHtml}
@@ -4488,6 +5028,10 @@ function render(){
   if(debugPanel) debugPanel.innerHTML = renderDebug();
   const modalRoot = document.getElementById('modalRoot');
   if(modalRoot) modalRoot.innerHTML = state.usernamePromptOpen ? renderUsernamePromptModal() : (state.friendHitPopup ? renderFriendHitPopup() : (state.newSwordPopup ? renderNewSwordPopup() : (state.expeditionResultQueue.length ? renderExpeditionResultPopup() : (state.dailyRewardPopup ? renderDailyRewardPopup() : (state.tutorialOpen ? renderTutorialModal() : (state.mineOpen ? renderMineOverview() : (state.catalogOpen ? renderCatalogOverview() : (state.settingsOpen ? renderSettingsModal() : (state.swordInventoryModalOpen ? renderInventoryModal() : (state.achievementsOpen ? renderAchievementsModal() : (state.wheelOpen ? renderWheelModal() : (state.expeditionsOpen ? renderExpeditionOverview() : (state.visitingFriendId ? renderFriendVisitModal() : '')))))))))))));
+  // Must run AFTER the innerHTML assignment above (needs the real DOM node
+  // to measure) — see fitFriendVisitContent()'s own comment for why this
+  // scales instead of scrolling.
+  if(state.visitingFriendId) fitFriendVisitContent();
   const app = document.getElementById('app');
   const meta = TAB_META[state.tab] || TAB_META.workshop;
   const mainContent = state.tab==='shop' ? renderShop() : state.tab==='workshop' ? renderWorkshop() : state.tab==='orders' ? renderOrders() : renderFriends();
@@ -4708,44 +5252,94 @@ const playHammerHitSfx = createSfxPool('audio/sfx-hammer-hit.wav', 3);
 const playCraftCompleteSfx = createSfxPool('audio/sfx-craft-complete.wav', 3);
 const playSwordDiscoverySfx = createSfxPool('audio/sfx-sword-discovery.wav', 3);
 
-const hadSave = loadGame();
-if(hadSave){
-  // Catch up anything that happened while the app was closed: mine ticks are
-  // driven off each mine's stored lastTick, and craft ready-flags off startAt,
-  // so both resolve correctly against the real gap in Date.now() below.
-  tickMines();
-  checkCraftCompletions();
-  tickJeanClaude();
-  // Same catch-up reasoning as tickMines() above — resolves any expedition
-  // that finished while the app was closed against real elapsed time.
-  checkExpeditions();
-  // Deliberately only on the hadSave branch — a brand-new player's very
-  // first-ever session should see the tutorial uninterrupted, not have this
-  // popup steal focus from it. They get their real Day 1 next time they open
-  // the app, once hadSave is true (which is almost immediately, given how
-  // aggressively this game autosaves).
-  checkDailyLogin();
-} else {
-  // Genuinely fresh player (no save found at all) — greet them with the
-  // tutorial. See the comment on state.tutorialOpen above for why this
-  // doesn't need its own persisted "already saw it" flag.
-  state.tutorialOpen = true;
-}
-// Unconditional (unlike checkDailyLogin() above) — a fresh player isn't
-// eligible yet anyway (refillExpeditionRequests() itself no-ops below level
-// 8), and a returning one should see the pool topped up immediately rather
-// than waiting for the first tick.
-refillExpeditionRequests();
-if(DEBUG_BUILD) checkSwordSpriteCoverage();
-// Not awaited — see registerOrLoadFriendIdentity()'s own comment for why
-// this must never delay the game loading.
-registerOrLoadFriendIdentity();
-render();
+// IIFE, not a bare `loadGame()` call — see loadGameWithRetry()'s own comment
+// for why a plain first-attempt-only read is dangerous enough to be worth an
+// async wrapper this late in the file (confirmed causing REAL, permanent
+// save loss in the field, not a theoretical concern).
+(async function boot(){
+  const hadSave = await loadGameWithRetry();
+  // Only NOW — after loadGameWithRetry() has fully settled, whether it
+  // found a real save or genuinely found none — is it safe for saveGame()
+  // to run at all. See bootLoadComplete's own declaration for the race this
+  // closes.
+  bootLoadComplete = true;
+  if(hadSave){
+    // Catch up anything that happened while the app was closed: mine ticks are
+    // driven off each mine's stored lastTick, and craft ready-flags off startAt,
+    // so both resolve correctly against the real gap in Date.now() below.
+    tickMines();
+    checkCraftCompletions();
+    tickJeanClaude();
+    // Same catch-up reasoning as tickMines() above — resolves any expedition
+    // that finished while the app was closed against real elapsed time.
+    checkExpeditions();
+    // Deliberately only on the hadSave branch — a brand-new player's very
+    // first-ever session should see the tutorial uninterrupted, not have this
+    // popup steal focus from it. They get their real Day 1 next time they open
+    // the app, once hadSave is true (which is almost immediately, given how
+    // aggressively this game autosaves).
+    checkDailyLogin();
+  } else {
+    // Genuinely fresh player (no save found at all) — greet them with the
+    // tutorial. See the comment on state.tutorialOpen above for why this
+    // doesn't need its own persisted "already saw it" flag.
+    state.tutorialOpen = true;
+  }
+  // Unconditional (unlike checkDailyLogin() above) — a fresh player isn't
+  // eligible yet anyway (refillExpeditionRequests() itself no-ops below level
+  // 8), and a returning one should see the pool topped up immediately rather
+  // than waiting for the first tick.
+  refillExpeditionRequests();
+  if(DEBUG_BUILD) checkSwordSpriteCoverage();
+  // Awaited — but this is just one fast local-file read (or a localStorage
+  // read on platforms without the file API), NOT a round-trip to
+  // FRIENDS_API_BASE, so it doesn't meaningfully delay boot. It has to
+  // finish before registerOrLoadFriendIdentity() runs below, or that
+  // function's own loadFriendIdentity() call reads the cache before
+  // initFriendIdentityCache() has ever filled it in, sees nothing, and
+  // mints a brand new identity every single launch — exactly the bug this
+  // whole block exists to fix. registerOrLoadFriendIdentity() itself
+  // remains NOT awaited past this point — see its own comment for why the
+  // real network call inside it must never delay the game loading.
+  await initFriendIdentityCache();
+  registerOrLoadFriendIdentity();
+  render();
+})();
 
 // Belt-and-suspenders saves for the Android/Capacitor wrapper: a backgrounded
 // WebView is paused, not cleanly unloaded, so don't rely on beforeunload alone.
-document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') saveGame(); });
-window.addEventListener('pagehide', saveGame);
+// A DEDICATED unload path, not just calling saveGame() — saveGame() now
+// awaits a fetch() to the file-based save API (see its own comment), and a
+// fetch that's still in flight when the page/process actually goes away can
+// get cut off, silently dropping exactly the save that mattered most: the
+// one at close time. navigator.sendBeacon() exists specifically for "fire
+// this request even though the page is unloading right now" and is
+// virtually guaranteed to be delivered even if the page disappears the
+// instant this function returns — it hands the request to the browser
+// process to send independently, rather than needing the page's own
+// lifetime to see it through.
+function saveGameOnUnload(){
+  if(isResetting) return;
+  if(!bootLoadComplete) return; // see bootLoadComplete's own comment
+  try{
+    const json = JSON.stringify(serializeState());
+    if(looksSuspiciouslyFreshCompared(json, lastKnownRawSave)) return;
+    if(usingFileBasedSave){
+      navigator.sendBeacon('/api/save', new Blob([JSON.stringify({data:json})], {type:'application/json'}));
+      lastKnownRawSave = json;
+      state.lastSaveAt = Date.now();
+    } else {
+      // localStorage.setItem is genuinely synchronous — no beacon needed on
+      // the platforms (Android/Capacitor, plain dev server) where this is
+      // the fallback path.
+      localStorage.setItem(SAVE_KEY, json);
+      lastKnownRawSave = json;
+      state.lastSaveAt = Date.now();
+    }
+  }catch(e){ /* storage unavailable/full — nothing else we can do here */ }
+}
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') saveGameOnUnload(); });
+window.addEventListener('pagehide', saveGameOnUnload);
 </script>
 </body>
 </html>

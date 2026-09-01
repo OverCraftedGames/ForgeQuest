@@ -1,4 +1,6 @@
 using System.Net;
+using System.Text;
+using System.Text.Json;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 
@@ -31,11 +33,26 @@ public class MainForm : Form
         Controls.Add(_webView);
 
         Load += async (_, _) => await InitializeAsync();
-        FormClosed += (_, _) => StopServer();
+        // Explicitly disposing the WebView2 control (not just relying on
+        // WinForms' automatic Controls-disposal-on-Form-Dispose) matters
+        // here: without an explicit, awaited-in-spirit shutdown handshake,
+        // its underlying browser/renderer/GPU child processes have been
+        // observed surviving a closed window as orphans — confirmed
+        // tonight, not theoretical: an orphaned renderer kept running the
+        // page's own once-a-second autosave in the background, racing a
+        // later launch's writes to the same save file. A genuinely forceful
+        // kill (taskkill /F, Process.Kill()) bypasses this entirely no
+        // matter what — nothing here changes that — but a NORMAL window
+        // close should tear the whole tree down cleanly.
+        FormClosed += (_, _) => { StopServer(); _webView.Dispose(); };
     }
 
     private async Task InitializeAsync()
     {
+        LogApiEvent($"STARTUP exe=[{Application.ExecutablePath}] baseDir=[{AppContext.BaseDirectory}] " +
+            $"localAppData=[{Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)}] " +
+            $"resolvedSaveFilePath=[{Path.GetFullPath(SaveFilePath)}] pid={Environment.ProcessId} " +
+            $"is64=[{Environment.Is64BitProcess}] user=[{Environment.UserName}]");
         var htmlPath = Path.Combine(AppContext.BaseDirectory, "www", "index.html");
         if (!File.Exists(htmlPath))
         {
@@ -172,6 +189,8 @@ public class MainForm : Form
         try
         {
             var reqPath = ctx.Request.Url?.AbsolutePath ?? "/";
+            if (reqPath == "/api/save") { HandleSaveApi(ctx); return; }
+            if (reqPath == "/api/friend-identity") { HandleFriendIdentityApi(ctx); return; }
             if (reqPath == "/") reqPath = "/index.html";
             var relative = reqPath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
             var fullPath = Path.GetFullPath(Path.Combine(wwwRoot, relative));
@@ -191,6 +210,226 @@ public class MainForm : Form
         }
         catch { /* client went away mid-response — nothing to do */ }
         finally { ctx.Response.OutputStream.Close(); }
+    }
+
+    // Real save persistence, bypassing WebView2/Chromium's own localStorage
+    // (LevelDB-backed) entirely — see SESSION_NOTES.md for the whole story:
+    // a cold-storage read race at boot (now also mitigated client-side by a
+    // retry) got permanently baked in by the once-a-second autosave, AND a
+    // separate incident where forcefully killing stray WebView2 processes
+    // appears to have caused that storage backend to roll back to an older
+    // checkpoint on its own — real, observed data loss from TWO different
+    // angles, both upstream of anything this app's own JS logic controls.
+    // A plain JSON file, written by THIS process, sidesteps that whole
+    // storage engine: GET returns whatever's on disk, POST replaces it, and
+    // the replace is atomic (write to a temp file, then File.Replace/Move)
+    // so a crash or forceful kill mid-write can only ever leave the
+    // PREVIOUS save intact, never a half-written/corrupt one and never a
+    // silent rollback to some unrelated older state. index.html feature-
+    // detects this endpoint (a 200 here vs. a 404 on a plain static server)
+    // and falls back to localStorage on platforms without it — Android/
+    // Capacitor, or this file served by a plain dev static-file server.
+    private static readonly string SaveFilePath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "ForgeQuest", "save.json");
+
+    // TEMPORARY diagnostic (see SESSION_NOTES.md, the save-appears-reset
+    // investigation) — logs every single GET/POST/DELETE this endpoint
+    // ever handles, server-side, independent of any client-JS complexity
+    // or the various competing test processes that turned out to be
+    // muddying earlier diagnosis. Remove once root-caused for real.
+    private static readonly string ApiLogPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "ForgeQuest", "api_save_log.txt");
+    private static void LogApiEvent(string line)
+    {
+        try { File.AppendAllText(ApiLogPath, $"{DateTime.Now:HH:mm:ss.fff} | {line}\n"); }
+        catch { /* best-effort logging only */ }
+    }
+    private static string SummarizeSaveJson(string json)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            int gold = root.TryGetProperty("gold", out var g) ? g.GetInt32() : -1;
+            int catalogCount = 0;
+            if (root.TryGetProperty("catalog", out var cat))
+                foreach (var mat in cat.EnumerateObject())
+                    catalogCount += mat.Value.GetArrayLength();
+            int friendsCount = root.TryGetProperty("friends", out var fr) ? fr.GetArrayLength() : -1;
+            return $"gold={gold} catalogCount={catalogCount} friendsCount={friendsCount} len={json.Length}";
+        }
+        catch (Exception ex) { return $"UNPARSEABLE ({ex.Message}), len={json.Length}, first120={json.Substring(0, Math.Min(120, json.Length))}"; }
+    }
+
+    private static void HandleSaveApi(HttpListenerContext ctx)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(SaveFilePath)!);
+            ctx.Response.Headers.Add("Cache-Control", "no-store");
+            switch (ctx.Request.HttpMethod)
+            {
+                case "GET":
+                {
+                    bool exists = File.Exists(SaveFilePath);
+                    string data = exists ? File.ReadAllText(SaveFilePath) : "";
+                    // Deep path/identity diagnostic — a running app's own read
+                    // returning DIFFERENT content than an external tool sees for
+                    // the "same" nominal path, confirmed happening tonight, means
+                    // something about path resolution or file identity itself
+                    // differs for this process specifically. Full canonicalized
+                    // path (bracketed to catch invisible whitespace) and the
+                    // actual on-disk write time as THIS PROCESS sees it settle
+                    // whether it's really the same file or not.
+                    string fullPath = Path.GetFullPath(SaveFilePath);
+                    string writeTime = exists ? File.GetLastWriteTimeUtc(SaveFilePath).ToString("O") : "n/a";
+                    LogApiEvent(exists
+                        ? $"GET  exists=true  path=[{fullPath}] writeTimeUtc={writeTime} {SummarizeSaveJson(data)}"
+                        : $"GET  exists=false path=[{fullPath}]");
+                    string json = exists
+                        ? JsonSerializer.Serialize(new { exists = true, data })
+                        : JsonSerializer.Serialize(new { exists = false, data = (string?)null });
+                    WriteJson(ctx, 200, json);
+                    break;
+                }
+                case "POST":
+                {
+                    var contentLengthHeader = ctx.Request.Headers["Content-Length"];
+                    using var reader = new StreamReader(ctx.Request.InputStream, ctx.Request.ContentEncoding ?? Encoding.UTF8);
+                    var bodyText = reader.ReadToEnd();
+                    using var doc = JsonDocument.Parse(bodyText);
+                    var data = doc.RootElement.GetProperty("data").GetString() ?? "";
+                    LogApiEvent($"POST contentLengthHeader={contentLengthHeader} actualBodyLen={bodyText.Length} {SummarizeSaveJson(data)}");
+                    // Atomic replace — see this method's own comment above for why
+                    // this specific sequence (write to .tmp, then Replace/Move)
+                    // is the whole point, not incidental. Per-call GUID suffix,
+                    // not a fixed ".tmp" name — confirmed happening tonight: two
+                    // overlapping POSTs (a retry racing the original, or the
+                    // once-a-second autosave overlapping an explicit "Save now")
+                    // both tried to open the SAME fixed temp filename at once,
+                    // throwing IOException on whichever lost the race. A unique
+                    // name per call means concurrent writers never collide, and
+                    // whichever finishes its own Replace() last simply wins —
+                    // still safe, still atomic, just no longer needlessly prone
+                    // to failing outright under completely normal overlap.
+                    var tmpPath = SaveFilePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+                    File.WriteAllText(tmpPath, data);
+                    if (File.Exists(SaveFilePath)) File.Replace(tmpPath, SaveFilePath, null);
+                    else File.Move(tmpPath, SaveFilePath);
+                    // Re-read immediately after our own write, logged, so this
+                    // log is a direct witness to what's ACTUALLY on disk right
+                    // after this specific write — not an assumption based on
+                    // what we just asked for. If a later GET in this same log
+                    // ever shows something else, that gap is the whole mystery.
+                    var verifyData = File.ReadAllText(SaveFilePath);
+                    LogApiEvent($"  -> post-write verify: {SummarizeSaveJson(verifyData)} writeTimeUtc={File.GetLastWriteTimeUtc(SaveFilePath):O}");
+                    WriteJson(ctx, 200, "{\"ok\":true}");
+                    break;
+                }
+                case "DELETE":
+                {
+                    LogApiEvent("DELETE");
+                    if (File.Exists(SaveFilePath)) File.Delete(SaveFilePath);
+                    WriteJson(ctx, 200, "{\"ok\":true}");
+                    break;
+                }
+                default:
+                    ctx.Response.StatusCode = 405;
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            LogApiEvent($"EXCEPTION method={ctx.Request.HttpMethod}: {ex}");
+            WriteJson(ctx, 500, JsonSerializer.Serialize(new { error = ex.Message }));
+        }
+        // No finally-close here — HandleRequest's own finally closes the stream
+        // once, for every route including this one; closing it a second time
+        // here would be redundant (and, depending on the exact HttpListener
+        // implementation, not guaranteed harmless).
+    }
+
+    // Friend identity persistence — playerId/friendCode/authSecret/username.
+    // Same atomic-write mechanism and same reasoning as SaveFilePath/
+    // HandleSaveApi above (see that method's comment for the full story of
+    // why plain WebView2 localStorage can't be trusted). This data was
+    // ORIGINALLY left in localStorage even after the main save moved to a
+    // file, on the assumption it changes rarely enough not to matter —
+    // confirmed wrong (see SESSION_NOTES.md): the same localStorage
+    // unreliability that lost real save progress also silently mints a
+    // BRAND NEW backend identity here every time it strikes, which is
+    // worse than a stale save — existing friends can no longer find you,
+    // and the one-time username prompt reappears every launch.
+    private static readonly string FriendIdentityFilePath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "ForgeQuest", "friend_identity.json");
+
+    private static void HandleFriendIdentityApi(HttpListenerContext ctx)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(FriendIdentityFilePath)!);
+            ctx.Response.Headers.Add("Cache-Control", "no-store");
+            switch (ctx.Request.HttpMethod)
+            {
+                case "GET":
+                {
+                    bool exists = File.Exists(FriendIdentityFilePath);
+                    string data = exists ? File.ReadAllText(FriendIdentityFilePath) : "";
+                    LogApiEvent(exists
+                        ? $"FRIEND-ID GET  exists=true  path=[{Path.GetFullPath(FriendIdentityFilePath)}] len={data.Length}"
+                        : $"FRIEND-ID GET  exists=false path=[{Path.GetFullPath(FriendIdentityFilePath)}]");
+                    string json = exists
+                        ? JsonSerializer.Serialize(new { exists = true, data })
+                        : JsonSerializer.Serialize(new { exists = false, data = (string?)null });
+                    WriteJson(ctx, 200, json);
+                    break;
+                }
+                case "POST":
+                {
+                    using var reader = new StreamReader(ctx.Request.InputStream, ctx.Request.ContentEncoding ?? Encoding.UTF8);
+                    var bodyText = reader.ReadToEnd();
+                    using var doc = JsonDocument.Parse(bodyText);
+                    var data = doc.RootElement.GetProperty("data").GetString() ?? "";
+                    LogApiEvent($"FRIEND-ID POST len={data.Length}");
+                    // Same per-call GUID-suffixed temp file + atomic Replace/Move
+                    // as HandleSaveApi's POST — see that method's comment for why
+                    // a fixed temp filename isn't safe under concurrent writers.
+                    var tmpPath = FriendIdentityFilePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+                    File.WriteAllText(tmpPath, data);
+                    if (File.Exists(FriendIdentityFilePath)) File.Replace(tmpPath, FriendIdentityFilePath, null);
+                    else File.Move(tmpPath, FriendIdentityFilePath);
+                    WriteJson(ctx, 200, "{\"ok\":true}");
+                    break;
+                }
+                case "DELETE":
+                {
+                    LogApiEvent("FRIEND-ID DELETE");
+                    if (File.Exists(FriendIdentityFilePath)) File.Delete(FriendIdentityFilePath);
+                    WriteJson(ctx, 200, "{\"ok\":true}");
+                    break;
+                }
+                default:
+                    ctx.Response.StatusCode = 405;
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            LogApiEvent($"FRIEND-ID EXCEPTION method={ctx.Request.HttpMethod}: {ex}");
+            WriteJson(ctx, 500, JsonSerializer.Serialize(new { error = ex.Message }));
+        }
+    }
+
+    private static void WriteJson(HttpListenerContext ctx, int status, string json)
+    {
+        ctx.Response.StatusCode = status;
+        ctx.Response.ContentType = "application/json; charset=utf-8";
+        var bytes = Encoding.UTF8.GetBytes(json);
+        ctx.Response.ContentLength64 = bytes.Length;
+        ctx.Response.OutputStream.Write(bytes, 0, bytes.Length);
     }
 
     private void StopServer()
