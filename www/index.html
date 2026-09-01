@@ -3164,8 +3164,25 @@ async function checkIncomingFriendRequests(){
   try{
     const resp = await fetch(FRIENDS_API_BASE+'/api/friends/requests', { headers: friendAuthHeaders() });
     if(!resp.ok) return;
-    state.incomingFriendRequests = await resp.json();
-    render();
+    const requests = await resp.json();
+    // REAL BUG, found via a live "have to click twice" / "feels like the
+    // page keeps refreshing" report: this used to call render() on every
+    // single poll, whether or not the list actually changed. That's a full
+    // #app innerHTML teardown/rebuild (see render()'s own doc comment)
+    // every FRIEND_SYNC_INTERVAL_MS (15s), on every tab, for every player —
+    // friend-identity registration happens automatically at boot regardless
+    // of whether Friends is ever opened, so this was firing for effectively
+    // everyone the whole time they played. This is the exact bug class the
+    // main 1s tick loop below was already fixed for (see its own comment:
+    // "made clicks feel unreliable everywhere else"); this newer polling
+    // path just never got the same "only render if something visibly
+    // changed" treatment. Compared as a set of ids, not by array equality
+    // or order, since the server has no particular reason to return the
+    // same order two polls in a row even when nothing changed.
+    const oldIds = state.incomingFriendRequests.map(r=>r.fromPlayerId).sort().join(',');
+    const newIds = requests.map(r=>r.fromPlayerId).sort().join(',');
+    state.incomingFriendRequests = requests;
+    if(newIds!==oldIds) render();
   }catch(e){ /* best-effort, same as every other background friends call */ }
 }
 
