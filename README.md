@@ -13,7 +13,7 @@ on the way to a Steam release.
 
 🔨 **Early development, but the core loop is full-featured.** Expect
 frequent changes and the occasional rough edge — Steam integration hasn't
-landed yet. Latest release: [v0.1.2](../../releases/tag/v0.1.2).
+landed yet. Latest release: [v0.1.3](../../releases/tag/v0.1.3).
 
 ## What's in the game right now
 
