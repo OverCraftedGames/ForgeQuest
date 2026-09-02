@@ -640,6 +640,11 @@
 </div>
 <div id="modalRoot"></div>
 <script>
+// Timestamp captured as the very first thing this script does, while
+// #bootScreen (static HTML, already visible by now) is the only thing on
+// screen — see hideBootScreen()'s own comment for what this is used for.
+const bootScreenShownAt = Date.now();
+
 /* ---------- DATA ---------- */
 
 const MATERIALS = [
@@ -5834,15 +5839,29 @@ const playSwordDiscoverySfx = createSfxPool('audio/sfx-sword-discovery.wav', 3);
 // Fades and removes the static #bootScreen (see its own HTML comment) —
 // called once, at the very end of boot() below, after the first real
 // render() has already painted whatever the player should actually see
-// next. The CSS transition handles the fade; this just waits for it to
-// finish before fully removing the node (display:none) so it can't
-// intercept clicks via pointer-events even for that brief window, and
-// isn't just invisibly sitting there taking up a fixed-position layer.
+// next. The CSS transition handles the fade; the trailing setTimeout just
+// waits for it to finish before fully removing the node (display:none) so
+// it can't intercept clicks via pointer-events even for that brief window,
+// and isn't just invisibly sitting there taking up a fixed-position layer.
+//
+// MIN_BOOT_SCREEN_MS holds the fade until at least this long after
+// bootScreenShownAt, even if boot() itself finished faster — this whole
+// boot sequence is local reads with no real network wait (see boot()'s own
+// comments), so on real hardware, especially the desktop build reading
+// from disk via its own localhost server, it can finish fast enough that
+// the screen would otherwise flash for a fraction of a second: technically
+// shown, not actually perceivable. 500ms is still "brief" (the actual ask),
+// just long enough to register as a real moment rather than a flicker.
+const MIN_BOOT_SCREEN_MS = 500;
 function hideBootScreen(){
   const el = document.getElementById('bootScreen');
   if(!el) return;
-  el.classList.add('bootScreenHide');
-  setTimeout(()=>{ el.style.display = 'none'; }, 350);
+  const elapsed = Date.now() - bootScreenShownAt;
+  const wait = Math.max(0, MIN_BOOT_SCREEN_MS - elapsed);
+  setTimeout(()=>{
+    el.classList.add('bootScreenHide');
+    setTimeout(()=>{ el.style.display = 'none'; }, 350);
+  }, wait);
 }
 
 // IIFE, not a bare `loadGame()` call — see loadGameWithRetry()'s own comment
