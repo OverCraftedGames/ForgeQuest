@@ -13,7 +13,7 @@ on the way to a Steam release.
 
 🔨 **Early development, but the core loop is full-featured.** Expect
 frequent changes and the occasional rough edge — Steam integration hasn't
-landed yet. Latest release: [v0.1.5](../../releases/tag/v0.1.5).
+landed yet. Latest release: [v0.1.7](../../releases/tag/v0.1.7).
 
 ## What's in the game right now
 
@@ -36,7 +36,9 @@ landed yet. Latest release: [v0.1.5](../../releases/tag/v0.1.5).
 - **Achievements** and a **7-day daily shop opening** cycle of ore and forge marks.
 - **Friends** — add friends by code and visit their workshop in a real
   popout: watch their live crafting grid and hammer their ready crafts to
-  help them out. Backed by a small dedicated server, not local-only.
+  help them out. Backed by a small dedicated server, not local-only. A
+  well-mastered friend's own expertise can land a better hit than you
+  could on your own — visiting a skilled friend genuinely helps.
 - **Cosmetic avatar & title** — your achievements double as unlockable
   profile icons and titles, shown to friends on your friend card. Pick
   yours from the "Your Profile" button in the Friends tab.
