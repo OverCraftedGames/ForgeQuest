@@ -1369,13 +1369,15 @@ const JEAN_CLODE_ID = 'jean-clode';
    working the same way once it is. -------------------------------------- */
 
 // Real deployed backend (Pterodactyl/Bloom.host, see ForgeQuest-Backend's
-// README "Deploying" section) — plain http:// on purpose for now, not a
-// typo: there's no reverse proxy/TLS in front of it yet (deliberately
-// deferred, see SESSION_NOTES.md), so X-Player-Secret currently travels
-// unencrypted. Fine for now-scale testing, NOT fine once this is in front
-// of strangers — revisit before then (swap to https:// once Caddy or
-// equivalent is in front of port 12832).
-const FRIENDS_API_BASE = 'http://friends.ocgames.xyz:12832';
+// README "Deploying" section). Now served over real HTTPS via a Caddy
+// reverse proxy in front of the .NET backend (real Let's Encrypt cert,
+// automatic HTTP-01 renewal — verified live, not just configured: fetching
+// this domain returns a real TLS-validated response). No :port suffix
+// needed anymore either -- Caddy terminates on the standard 443, matching
+// this bare https:// URL, rather than the backend's old raw :12832. Every
+// request through here (X-Player-Secret included) is now actually
+// encrypted in transit, closing the exact gap this comment used to flag.
+const FRIENDS_API_BASE = 'https://friends.ocgames.xyz';
 const FRIEND_IDENTITY_KEY = 'forgequest_friend_identity_v1';
 
 // Same file-backed-vs-localStorage split as the main save (see
