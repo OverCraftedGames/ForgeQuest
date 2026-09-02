@@ -1208,6 +1208,21 @@ const GRID_UPGRADE_MARK_COST = [30, 60, 110, 170];
    unlocks (bronze@3, iron@6, steel@10) so a bigger table reads as reputation-earned,
    not just a gold sink. */
 const GRID_UPGRADE_REQ_LEVEL = [2, 4, 7, 11];
+// Real user feedback: unlocking table 2 (level 5+) let it jump straight to
+// 3x3 immediately, since GRID_UPGRADE_REQ_LEVEL's own gates for tiers 0->1
+// and 1->2 (level 2 and 4) are already satisfied by the time table 2 can
+// even exist -- a second table catching up to the first one's size the
+// instant it's bought, paced by nothing but gold. Station 0 (the starting
+// table) is available from level 1, so its gate is exactly this array's own
+// values, unchanged. Any later table adds its own unlock level on top of
+// the same relative curve, so growing IT to full size costs the same
+// relative level investment table 1 needed, just starting from wherever it
+// unlocked instead of from level 1 -- table 2 stays stuck at 2x2 until
+// level 7 (5+2), not immediately at 3x3 the moment it's bought.
+function gridUpgradeReqLevel(stationIdx, tier){
+  const base = stationIdx===0 ? 0 : TABLE2_CONFIG.reqLevel;
+  return base + GRID_UPGRADE_REQ_LEVEL[tier];
+}
 /* Premium (mark) prices to buy a single hammer token directly, skipping the wheel. */
 const HAMMER_MARK_COST = {fire:25, magic:45, obsidian:30, gold:35, glass:20};
 
@@ -3836,7 +3851,7 @@ function closeWheel(){ state.wheelOpen = false; render(); }
 function upgradeStation(idx){
   const st = state.stations[idx];
   if(!st.unlocked || st.tier>=MAX_TABLE_TIER) return;
-  if(state.level<GRID_UPGRADE_REQ_LEVEL[st.tier]) return;
+  if(state.level<gridUpgradeReqLevel(idx, st.tier)) return;
   const cost = upgradeGridCost(st.tier);
   if(state.gold<cost) return;
   state.gold -= cost;
@@ -3848,7 +3863,7 @@ function upgradeStation(idx){
 function upgradeStationMarks(idx){
   const st = state.stations[idx];
   if(!st.unlocked || st.tier>=MAX_TABLE_TIER) return;
-  if(state.level<GRID_UPGRADE_REQ_LEVEL[st.tier]) return;
+  if(state.level<gridUpgradeReqLevel(idx, st.tier)) return;
   const cost = GRID_UPGRADE_MARK_COST[st.tier];
   if(cost===undefined || state.marks<cost) return;
   state.marks -= cost;
@@ -4127,7 +4142,7 @@ function renderMarkShop(){
   const upgradeRows = state.stations.map((st,i)=>{
     if(!st.unlocked || st.tier>=MAX_TABLE_TIER) return '';
     const cost = GRID_UPGRADE_MARK_COST[st.tier];
-    const reqLevel = GRID_UPGRADE_REQ_LEVEL[st.tier];
+    const reqLevel = gridUpgradeReqLevel(i, st.tier);
     const locked = state.level<reqLevel;
     const [nr, nc] = GRID_TIERS[st.tier+1];
     const canBuy = !locked && state.marks>=cost;
@@ -4394,7 +4409,7 @@ function renderStation(st, i){
   }
   const [rows, cols] = GRID_TIERS[st.tier];
   const upCost = upgradeGridCost(st.tier);
-  const upReqLevel = GRID_UPGRADE_REQ_LEVEL[st.tier];
+  const upReqLevel = gridUpgradeReqLevel(i, st.tier);
   const levelLocked = st.tier<MAX_TABLE_TIER && state.level<upReqLevel;
   const canUpgrade = st.tier<MAX_TABLE_TIER && !levelLocked && state.gold>=upCost;
   // Same mark-priced upgrade the Mark shop already offers, surfaced right on the
