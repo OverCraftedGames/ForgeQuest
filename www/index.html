@@ -1741,7 +1741,7 @@ async function checkFriendPendingHits(){
       const c = st && st.craftings.find(x=>x.id===payload.craftId);
       if(!c || !c.ready) return; // already collected/changed since it was queued — skip
       const hitsBefore = c.hits;
-      hammerHit(payload.stationIdx, payload.craftId, payload.hammerId, hit.fromPlayerId);
+      hammerHit(payload.stationIdx, payload.craftId, payload.hammerId, hit.fromPlayerId, payload.hammererExpertiseBonus);
       if(c.hits>hitsBefore){
         applied++;
         // hit.fromDisplayName is whatever the sender's name was AT SEND TIME
@@ -3175,8 +3175,19 @@ function closeHammerRadial(){
 // the smith hammer works this way — free, unlimited-use, but capped at one hit
 // per distinct source rather than one hit total like the other (inventory-
 // limited) hammers, so a friend visiting can add their own +1 alongside yours.
-function hammerHit(stationIdx, craftId, hammerId, sourceId){
+// hammererExpertiseBonus: the HAMMERING player's own material-expertise
+// crit bonus (0 by default) for a hit sourced from a friend, computed on
+// THEIR client (see hammerFriendCraft()) and carried over in the hit
+// payload — hammerHit() itself always runs on the craft OWNER's client
+// (see checkFriendPendingHits()), so it has no way to see a visiting
+// friend's own state.materialExpertise otherwise. Clamped defensively on
+// arrival (see below) since it's an untrusted, client-reported number,
+// same trust level this whole friends system already gives hammerId/etc.
+// for a remote hit — not full anti-cheat, just enough to stop a garbled or
+// out-of-range value from doing anything worse than a normal hit would.
+function hammerHit(stationIdx, craftId, hammerId, sourceId, hammererExpertiseBonus){
   sourceId = sourceId || 'player';
+  hammererExpertiseBonus = Math.min(MATERIAL_EXPERTISE_CRIT_CAP, Math.max(0, Number(hammererExpertiseBonus)||0));
   const st = state.stations[stationIdx];
   const c = st.craftings.find(x=>x.id===craftId);
   state.openHammerRadial = null;
@@ -3226,9 +3237,31 @@ function hammerHit(stationIdx, craftId, hammerId, sourceId){
   if(hammerId==='gold'){ c.saleBonus = true; note=' This sword will sell for 20% more.'; }
   if(hammerId!=='magic' && Math.random()<HAMMER_QUALITY_CHANCE){ c.rankBumps++; note += ' The strike lands true &mdash; quality rises a tier!'; }
   c.apBonus += apAdd; c.dpBonus += dpAdd;
-  const critChance = HAMMER_HIT_CRIT_CHANCE + (hammerId==='smith' ? SMITH_HAMMER_CRIT_BONUS : 0) + averageMaterialExpertiseCritBonus(c.distinct);
+  // Real social hook, per explicit request: a visiting friend's OWN
+  // expertise in this craft's material(s) can matter too, not just the
+  // owner's — whoever's more experienced with the material determines how
+  // skilled the hit is, rather than the two stacking (stacking would let a
+  // pair of maxed-out experts push crit chance well past what
+  // MATERIAL_EXPERTISE_CRIT_CAP was ever designed to allow on its own).
+  // Falls through to just the owner's bonus for every non-friend source
+  // (a normal player click, or Jean Clode's — neither passes a
+  // hammererExpertiseBonus, so it defaults to 0 and max() picks the owner's).
+  const ownerExpertiseBonus = averageMaterialExpertiseCritBonus(c.distinct);
+  const expertiseBonus = Math.max(ownerExpertiseBonus, hammererExpertiseBonus);
+  const critChance = HAMMER_HIT_CRIT_CHANCE + (hammerId==='smith' ? SMITH_HAMMER_CRIT_BONUS : 0) + expertiseBonus;
   const crit = Math.random()<critChance;
-  if(crit){ c.rankBumps++; note += ' Critical hit!'; }
+  if(crit){
+    c.rankBumps++;
+    note += ' Critical hit!';
+    // Only called out when it actually made the difference AND actually
+    // landed a crit — otherwise this would just be flavor text on every
+    // single friend hit regardless of whether their mastery did anything.
+    if(sourceId!=='player' && hammererExpertiseBonus>ownerExpertiseBonus){
+      const friend = state.friends.find(f=>f.id===sourceId);
+      const possessive = friend ? (friend.displayName||friend.friendCode)+'&rsquo;s' : 'their';
+      note += ' ('+possessive+' expertise made the difference.)';
+    }
+  }
   const hm = HAMMERS.find(h=>h.id===hammerId);
   setToast('Hit it with the '+hm.name+'.'+note+' ('+c.hits+'/'+MAX_HAMMER_HITS+') &mdash; now Rank '+previewRank(c)+'.');
   render();
@@ -3732,11 +3765,18 @@ async function hammerFriendCraft(targetPlayerId, stationIdx, craftId, hammerId){
   saveGame();
   render();
 
+  // The VISITOR's own expertise in this craft's material(s), computed off
+  // OUR OWN state.materialExpertise (never the friend's — we have no
+  // visibility into that) using the exact same averaging helper hammerHit()
+  // itself uses for the owner's side. Sent along so the receiving client
+  // can take the better of the two — see hammerHit()'s own comment for why
+  // it's "better of," not "both added together."
+  const hammererExpertiseBonus = averageMaterialExpertiseCritBonus(c.distinct);
   try{
     await fetch(FRIENDS_API_BASE+'/api/stations/'+encodeURIComponent(targetPlayerId)+'/hits', {
       method:'POST',
       headers: Object.assign({'Content-Type':'application/json'}, friendAuthHeaders()),
-      body: JSON.stringify({payloadJson: JSON.stringify({type:'hammerCraft', stationIdx, craftId, hammerId})}),
+      body: JSON.stringify({payloadJson: JSON.stringify({type:'hammerCraft', stationIdx, craftId, hammerId, hammererExpertiseBonus})}),
     });
   }catch(e){ /* best-effort — see this function's doc comment */ }
 }
