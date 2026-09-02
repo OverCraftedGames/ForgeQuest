@@ -353,7 +353,17 @@
   .orderCard.fulfillable{border-color:var(--green-border);background:var(--green-bg);}
   .expDraft{display:flex;flex-direction:column;gap:8px;margin-top:10px;width:100%;}
   .expSlot{display:flex;flex-direction:column;gap:3px;}
-  .expSlot select{width:100%;}
+  .expSwordGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:6px;}
+  .expSwordOption{
+    display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 4px;text-align:center;
+    background:rgba(245,234,216,.6);border:1.5px solid var(--border);border-radius:var(--radius-sm);
+    cursor:pointer;font-size:10px;line-height:1.25;
+  }
+  .expSwordOption:hover{border-color:var(--accent-600);}
+  .expSwordOption.selected{border-color:var(--accent);background:var(--accent-100);}
+  .expSwordOption img{width:40px;height:40px;object-fit:contain;}
+  .expSwordOption .expSwordName{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
+  .expSwordOption .expSwordStats{color:var(--muted);}
   .catalogGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:10px;}
   .catalogItem{background:rgba(245,234,216,.6);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:9px;font-size:11px;}
   .catalogItem.locked{opacity:.42;}
@@ -1265,9 +1275,20 @@ const HAMMER_HIT_CRIT_CHANCE = 0.15;
    stack additively with smith's own bonus specifically, so at high mastery
    smith's total (was 0.15+0.12+0.20=47%) ran well past every other
    hammer's (0.15+0.20=35%) despite smith being free/unlimited-use and the
-   others costing real inventory. 0.07 keeps a real edge (42% vs 35% at max
-   mastery) without letting expertise blow that gap wide open. */
-const SMITH_HAMMER_CRIT_BONUS = 0.07;
+   others costing real inventory.
+   Reverted again, 0.07 -> 0.02, once the smith hammer became player-repeatable
+   on a cooldown (SMITH_HAMMER_COOLDOWN_MS, see the player's-own-hits note
+   below) instead of the old single-hit-per-source rule: that change didn't
+   touch this constant directly, but it removed the ONE thing that used to
+   cap how much of a per-hit edge could compound over a craft's lifetime — a
+   special hammer still only ever gets its one shot, while the player can now
+   land as many smith hits on the same craft as the 60s cooldown allows.
+   Any positive per-hit edge compounds across an effectively unlimited number
+   of attempts, so the raw percentage matters far less than it used to; 0.02
+   keeps just enough of a nudge that smith isn't flatly worse per-swing than
+   the free base rate, without also stacking a real double-digit edge onto
+   every one of an unlimited number of re-hits. */
+const SMITH_HAMMER_CRIT_BONUS = 0.02;
 /* Chance a non-magic hammer hit raises quality a tier on its own (on top of the crit
    chance above); the magic hammer's tier-up is guaranteed instead of chance-based. */
 const HAMMER_QUALITY_CHANCE = 0.3;
@@ -2743,11 +2764,23 @@ const EXPEDITION_FAILURE_PAYOUT_FRACTION = 0.22;
 // but contributes nothing to leveling, keeping the risk/reward real.
 const EXPEDITION_REP_DIVISOR = 150;
 
+// Level-only check for "is the system unlocked at all" — kept separate from
+// eligibleExpeditionTiers() below (which ALSO excludes tiers currently out on
+// a job) so that having one of every tier active at once doesn't make the
+// whole modal look locked again.
+function expeditionsUnlocked(){
+  return state.level >= EXPEDITION_TIERS.easy.reqLevel;
+}
+// Only one expedition per difficulty may be active at a time — a tier with a
+// party already out isn't offered again until that one resolves. Used both to
+// pick new requests and to decide what's allowed to sit in the offer pool.
 function eligibleExpeditionTiers(){
-  return Object.entries(EXPEDITION_TIERS).filter(([id,t])=>state.level>=t.reqLevel);
+  const busy = new Set(state.activeExpeditions.map(e=>e.tier));
+  return Object.entries(EXPEDITION_TIERS).filter(([id,t])=>state.level>=t.reqLevel && !busy.has(id));
 }
 function pickExpeditionTier(){
   const eligible = eligibleExpeditionTiers();
+  if(!eligible.length) return null; // caller must check eligibleExpeditionTiers().length first
   const total = eligible.reduce((sum,[,t])=>sum+t.weight, 0);
   let r = Math.random()*total;
   for(const [id,t] of eligible){ if((r-=t.weight)<0) return id; }
@@ -2862,8 +2895,15 @@ function generateExpeditionRequest(){
   };
 }
 function refillExpeditionRequests(){
-  if(!eligibleExpeditionTiers().length) return; // system not unlocked yet
-  while(state.expeditionRequests.length < 2) state.expeditionRequests.push(generateExpeditionRequest());
+  if(!expeditionsUnlocked()) return; // system not unlocked yet
+  // Drop any pooled offer whose tier just became busy (a same-tier expedition
+  // departed elsewhere) — otherwise a second copy of a tier already out on a
+  // job could still sit in the "Available" list waiting to be committed.
+  const eligibleIds = new Set(eligibleExpeditionTiers().map(([id])=>id));
+  state.expeditionRequests = state.expeditionRequests.filter(r=>eligibleIds.has(r.tier));
+  while(state.expeditionRequests.length < 2 && eligibleExpeditionTiers().length){
+    state.expeditionRequests.push(generateExpeditionRequest());
+  }
 }
 // Which owned swords currently qualify for one open slot on a request — a
 // sword already assigned to a different slot in this same commit can't fill
@@ -2875,6 +2915,11 @@ function commitExpedition(requestId, swordIds){
   const idx = state.expeditionRequests.findIndex(r=>r.id===requestId);
   if(idx<0) return;
   const request = state.expeditionRequests[idx];
+  // Defensive re-check: only one active expedition per difficulty (see
+  // eligibleExpeditionTiers()) — refillExpeditionRequests() already purges a
+  // stale same-tier offer as soon as one departs, but re-check here too in
+  // case a second tab/click slipped a commit in between renders.
+  if(state.activeExpeditions.some(e=>e.tier===request.tier)) return;
   if(swordIds.length!==3 || new Set(swordIds).size!==3) return;
   const swords = swordIds.map(id=>state.inventory.find(s=>s.id===id));
   if(swords.some(s=>!s)) return;
@@ -2888,14 +2933,19 @@ function commitExpedition(requestId, swordIds){
   // how the expedition eventually resolves (see the design note up top).
   state.inventory = state.inventory.filter(s=>!swordIds.includes(s.id));
   state.expeditionRequests.splice(idx,1);
-  refillExpeditionRequests();
 
   const tier = EXPEDITION_TIERS[request.tier];
+  // Pushed BEFORE refillExpeditionRequests() below, not after — that call
+  // filters the pool through eligibleExpeditionTiers(), which reads
+  // state.activeExpeditions to decide which tiers are busy. Refilling first
+  // would check against the pre-departure list, missing this tier's own
+  // expedition and letting a second same-tier offer survive the purge.
   state.activeExpeditions.push({
     id: request.id, party: request.party, tier: request.tier,
     startAt: Date.now(), durationMs: tier.durationMs,
     swords: swordSnapshot, referenceValue, partyPower, floorPower: request.floorPower,
   });
+  refillExpeditionRequests();
   setToast(request.party+' departs with your swords. Back in '+Math.round(tier.durationMs/3600000)+'h.');
   saveGame();
   render();
@@ -3406,7 +3456,16 @@ setInterval(()=>{
     !state.wheelSpinning && ( // a full render() would tear down #wheelDial mid-spin and kill the CSS transition — see openWheel()
       (state.tab==='workshop' && anyJustBecameReady) ||
       state.mineOpen ||
-      state.expeditionsOpen ||
+      // Not while a sword draft is open, though — same reasoning as
+      // stillCookingOnWorkshop below: tearing the modal's DOM down every
+      // second (just to tick the "Returns in Xh Ym" text on unrelated active
+      // expeditions) was closing the sword picker's dropdown mid-click and
+      // could reshuffle which sword an in-flight click landed on, making the
+      // shown success chance/reward flicker before the player ever hit
+      // Depart. The countdown simply goes stale for the few seconds a draft
+      // is open — the modal already re-renders the moment it's confirmed or
+      // cancelled.
+      (state.expeditionsOpen && !state.expeditionDraft) ||
       expeditionResolved || // always show the result popup as soon as it's ready, regardless of tab
       jeanClaudeVisited // always show the toast/updated hit counts, regardless of tab
       // Note: a visited friend's station countdown is a static snapshot as
@@ -4061,7 +4120,7 @@ function toggleExpeditionsOverview(){
   // is what actually gates access. Never even flips expeditionsOpen to true
   // while ineligible, so there's nothing to reach a real (empty) overview by
   // toggling twice or similar.
-  if(!eligibleExpeditionTiers().length){
+  if(!expeditionsUnlocked()){
     setToast('Expeditions unlock at business level '+EXPEDITION_TIERS.easy.reqLevel+'.');
     render();
     return;
@@ -4629,13 +4688,22 @@ function renderExpeditionSlotPicker(request, slotIdx){
   // fill this one — everything else in inventory that matches is fair game.
   const takenElsewhere = draft ? draft.swordIds.filter((id,i)=>i!==slotIdx && id) : [];
   const eligible = eligibleSwordsForSlot(slot, takenElsewhere);
-  const options = eligible.map(s=>`<option value="${s.id}" ${s.id===chosenId?'selected':''}>${s.name} (Rank ${s.rank}, AP${s.ap}/DP${s.dp})</option>`).join('');
+  // A grid of sprite tiles rather than a plain <select> — lets a player see
+  // what they're actually sending out (art + stats) instead of picking off a
+  // text list. Clicking the already-selected tile again clears the slot,
+  // same as the old picker's blank "— choose a sword —" option.
+  const tiles = eligible.map(s=>{
+    const selected = s.id===chosenId;
+    const art = SWORD_SPRITE_NOTITLE[s.name] || SWORD_SPRITE_FALLBACK_NOTITLE;
+    return `<div class="expSwordOption ${selected?'selected':''}" title="${s.name}" onclick="setExpeditionDraftSlot(${slotIdx}, '${selected?'':s.id}')">
+      <img src="${art}" alt="${s.name}">
+      <div class="expSwordName">${s.name}</div>
+      <div class="expSwordStats">Rank ${s.rank} &middot; AP${s.ap}/DP${s.dp}</div>
+    </div>`;
+  }).join('');
   return `<div class="expSlot">
     <div class="small">Slot ${slotIdx+1} &mdash; ${expeditionSlotLabel(slot)}</div>
-    <select onchange="setExpeditionDraftSlot(${slotIdx}, this.value)">
-      <option value="">${eligible.length? '— choose a sword —' : 'No qualifying sword in stock'}</option>
-      ${options}
-    </select>
+    ${eligible.length? `<div class="expSwordGrid">${tiles}</div>` : `<div class="small" style="opacity:.7;">No qualifying sword in stock</div>`}
   </div>`;
 }
 function renderExpeditionRequestCard(request){
