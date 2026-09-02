@@ -13,7 +13,7 @@ on the way to a Steam release.
 
 🔨 **Early development, but the core loop is full-featured.** Expect
 frequent changes and the occasional rough edge — Steam integration hasn't
-landed yet. Latest release: [v0.1.7](../../releases/tag/v0.1.7).
+landed yet. Latest release: [v0.1.9](../../releases/tag/v0.1.9).
 
 ## What's in the game right now
 
@@ -26,7 +26,9 @@ landed yet. Latest release: [v0.1.7](../../releases/tag/v0.1.7).
   alongside its stats, both the first time you collect it and any time you
   revisit the Catalog after.
 - **Hammers** — hire hammers with distinct special effects (cutting craft
-  time, boosting crit chance, and more) to work a table alongside you.
+  time, boosting crit chance, and more) to work a table alongside you. Your
+  free Smith hammer can swing again every minute, so patience alone can
+  carry a craft to a top rank.
 - **Mines** — unlock passive mines that produce ore on their own over time.
 - **Orders** — fill orders for adventurer customers to turn swords into gold.
 - **Expeditions** (business level 8+) — send swords out with a party of
