@@ -11,9 +11,9 @@
     <ApplicationIcon>Resources\app.ico</ApplicationIcon>
     <!-- Bump this before every shared/exported build (see SESSION_NOTES.md "Versioning shared builds").
          Drives the exe's own file-properties version AND the exported filename. -->
-    <Version>0.1.17</Version>
-    <FileVersion>0.1.17.0</FileVersion>
-    <AssemblyVersion>0.1.17.0</AssemblyVersion>
+    <Version>0.1.18</Version>
+    <FileVersion>0.1.18.0</FileVersion>
+    <AssemblyVersion>0.1.18.0</AssemblyVersion>
   </PropertyGroup>
 
   <ItemGroup>
