@@ -38,6 +38,12 @@
     --wk-tray-h:238px; --wk-tray-tab-w:210px; --wk-tray-title:24px; --wk-tray-item-pad:12px 18px;
     --wk-tray-icon:52px; --wk-tray-min-w:104px;
     --wk-hud-num:24px; --wk-hud-icon:34px; --wk-gold-pad:10px 20px 10px 12px;
+    /* Measured live: the rep bar (the HUD's own 2nd row) bottom edge sits at
+       135px in wide mode -- toast moved here (was centered at --wk-table-top,
+       floating over the crafting table) per direct feedback, now a fixed
+       12px below the HUD stack instead, left-aligned with it rather than
+       centered on screen. */
+    --wk-toast-top:147px;
   }
   /* ---- Compact (1440x700) layout — Phase 7 values-only swap ----
      Redefines every --wk-* token above using the design handoff's
@@ -60,6 +66,7 @@
     --wk-tray-h:166px; --wk-tray-tab-w:158px; --wk-tray-title:19px; --wk-tray-item-pad:8px 12px;
     --wk-tray-icon:38px; --wk-tray-min-w:84px;
     --wk-hud-num:18px; --wk-hud-icon:26px; --wk-gold-pad:7px 15px 7px 9px;
+    --wk-toast-top:109px; /* measured live: rep bar bottom sits at 101px in compact, +8px gap */
   }
   /* .wkModalBackdrop's padding (50px wide) isn't a --wk-* token — it was never
      tokenized in Phase 1, so it needs its own literal override here (24px
@@ -314,8 +321,11 @@
   .wkTrayItem .name{font:600 13px/1 var(--font-body);color:var(--text);}
   .wkTrayItem .count{font:700 15px/1 var(--font-body);color:var(--gold);}
 
+  /* Was centered over the crafting table (top:var(--wk-table-top), left:50%)
+     -- moved to sit just below the HUD's reputation bar instead, left-aligned
+     with the HUD rather than screen-centered, per direct feedback. */
   .wkToast{
-    position:absolute;top:var(--wk-table-top);left:50%;transform:translateX(-50%);z-index:120;
+    position:absolute;top:var(--wk-toast-top);left:var(--wk-pad);z-index:120;
     background:var(--accent-100);border:2px solid var(--accent);color:var(--gold);padding:11px 24px;border-radius:999px;
     font:700 16px/1 var(--font-body);box-shadow:var(--shadow-lg);
   }
@@ -3995,10 +4005,20 @@ setInterval(()=>{
   // now. A blanket render() every tick used to tear down and rebuild the whole DOM
   // once a second, which reset focus/selection in any focused input (impossible to
   // type in the friend box) and made clicks feel unreliable everywhere else.
-  const stillCookingOnWorkshop = state.tab==='workshop' && state.stations.some(st=>st.craftings.some(c=>!c.ready));
+  // state.tab used to gate both of these (only tick the visible tab's own
+  // timers) back when Workshop/Shop/Orders/Friends were separate tabs --
+  // dead weight now that Workshop is unconditionally the only screen (see
+  // render()'s own comment), and actively harmful: state.tab is only ever
+  // written by loading an OLD save file that still has a non-'workshop'
+  // value baked in (nothing in the current UI ever calls setTab() again to
+  // reset it), which silently disabled BOTH the ready-craft sound/sync
+  // trigger below AND the per-craft cooking-progress refresh entirely for
+  // any such save, forever, with no user-visible error -- just a
+  // never-ticking progress bar.
+  const stillCookingOnWorkshop = state.stations.some(st=>st.craftings.some(c=>!c.ready));
   const needsFullRender =
     !state.wheelSpinning && ( // a full render() would tear down #wheelDial mid-spin and kill the CSS transition — see openWheel()
-      (state.tab==='workshop' && anyJustBecameReady) ||
+      anyJustBecameReady ||
       state.mineOpen ||
       // Not while a sword draft is open, though — same reasoning as
       // stillCookingOnWorkshop below: tearing the modal's DOM down every
@@ -6523,12 +6543,15 @@ function renderSignCol(){
 function renderWorkshopHud(){
   const pct = Math.min(100, Math.round(state.exp/expToNext(state.level)*100));
   const ready = wheelReady();
-  const remain = Math.ceil(wheelRemainingMs()/1000);
+  // formatMs() (already used for the hammer-cooldown tooltips) gives "Xm
+  // YYs" -- was raw whole seconds here (e.g. "3311s" for a fresh hour-long
+  // cooldown), unreadable at a glance for a cooldown this long.
+  const remain = formatMs(wheelRemainingMs());
   return `<div class="wkHud">
     <div class="wkHudRow">
       <div class="wkPill"><img src="${GOLD_ICON}" alt="Gold"><span class="wkPillNum gold">${state.gold.toLocaleString()}</span></div>
       <div class="wkPill"><span class="wkPillGem">&#128142;</span><span class="wkPillNum mark">${state.marks.toLocaleString()}</span></div>
-      <button type="button" class="wkWheelBtn ${ready?'':'cooling'}" onclick="openWheel()">${ready? '&#127920; Spin' : '&#127920; '+remain+'s'}</button>
+      <button type="button" class="wkWheelBtn ${ready?'':'cooling'}" onclick="openWheel()">${ready? '&#127920; Spin' : '&#127920; '+remain}</button>
     </div>
     <div class="wkRepBar">
       <span class="wkRepLabel">Lv ${state.level}</span>
