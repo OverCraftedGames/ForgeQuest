@@ -73,17 +73,23 @@
      compact, per the handoff's overlayWrapStyle). */
   body[data-layout="compact"] .wkModalBackdrop{padding:24px;}
   *{box-sizing:border-box;}
-  /* Plain neutral fill, no image/wash of its own -- #app (below) is the
-     thing that actually paints the workshop scene now, at full saturation,
-     no tint (per the design handoff's own explicit note: "an earlier
-     wash was explicitly removed"). This rule used to carry the SAME
-     washed background image #bootScreen still has below, from before
-     #app existed as its own canvas -- but #app never actually got its own
-     background-image when it was built, so it stayed fully transparent
-     and body's washed image was quietly showing through it this entire
-     time, everywhere in the game, not just around the edges. */
+  /* Same image as #app (below), no wash -- #app is a FIXED 1920x1080/
+     1440x700 canvas, centered by #layout, so on any window/monitor wider
+     than that (an ultrawide display, or simply not maximized to exactly
+     that size) there's real body backdrop visible either side of it.
+     Removing the wash here too (not just from #app) previously left that
+     margin a flat tan (--e0d2b8) instead of the image continuing outward
+     -- confirmed directly against a real ultrawide screenshot: the image
+     used to visibly stretch/continue into that space (because body used
+     to carry the same washed image #app now carries on its own), and
+     went flat the moment body's own copy was dropped down to a bare
+     color. Same image, same cover/center, just no gradient overlay --
+     matches #app's own now-unwashed copy, just doesn't need to be a
+     pixel-identical crop since it's only ever visible in a margin, never
+     side-by-side with #app's own copy. */
   body{
     margin:0; font-family:var(--font-body); color:var(--text); min-height:100vh;
+    background-image:url("backgrounds/body-workshop.jpg");background-size:cover;background-position:center;
     background-color:#e0d2b8;
   }
   /* Boot screen (see the HTML comment next to #bootScreen for why this is
