@@ -18,8 +18,13 @@ public class MainForm : Form
     public MainForm()
     {
         Text = "ForgeQuest";
-        Width = 1440;
-        Height = 900;
+        // Client area (not outer Size/Width/Height — see ApplyWindowSize below
+        // for why that distinction matters), matching state.layout's default
+        // of 'wide' (1920x1080) in index.html. Was a plain Width/Height of
+        // 1440x900 pre-ui-overhaul, which — being the OUTER window size, title
+        // bar and borders included — never actually gave the page a full
+        // 1440x900 content area to render into to begin with.
+        ClientSize = new Size(1920, 1080);
         MinimumSize = new Size(1000, 650);
         StartPosition = FormStartPosition.CenterScreen;
 
@@ -102,7 +107,65 @@ public class MainForm : Form
             return;
         }
 
+        // JS -> host bridge for Settings -> Window size (see index.html's
+        // setLayout()). window.chrome.webview.postMessage(...) only exists
+        // for a page actually hosted in this WebView2 control, which is
+        // exactly when this event fires — nothing extra to guard here on
+        // this side, index.html's own `if (window.chrome && window.chrome.webview)`
+        // check is what keeps this a no-op for a plain-browser preview.
+        _webView.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
+
         _webView.CoreWebView2.Navigate($"http://127.0.0.1:{port}/");
+    }
+
+    // Expects a JSON string message (posted via
+    // window.chrome.webview.postMessage(JSON.stringify(...)), hence
+    // TryGetWebMessageAsString() rather than WebMessageAsJson — that
+    // property is for a message posted as an object, not a string) shaped
+    // like {"type":"setWindowSize","layout":"wide"|"compact","width":n,"height":n}.
+    // width/height (the actual content-area target) are trusted first;
+    // layout is only a fallback in case a future caller omits them.
+    private void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
+    {
+        try
+        {
+            var json = e.TryGetWebMessageAsString();
+            if (string.IsNullOrEmpty(json)) return;
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            if (!root.TryGetProperty("type", out var typeProp) || typeProp.GetString() != "setWindowSize") return;
+
+            int width = root.TryGetProperty("width", out var w) && w.TryGetInt32(out var wi) ? wi : 0;
+            int height = root.TryGetProperty("height", out var h) && h.TryGetInt32(out var hi) ? hi : 0;
+            if (width <= 0 || height <= 0)
+            {
+                var layout = root.TryGetProperty("layout", out var l) ? l.GetString() : null;
+                (width, height) = layout == "compact" ? (1440, 700) : (1920, 1080);
+            }
+            ApplyWindowSize(width, height);
+        }
+        catch (Exception ex)
+        {
+            LogApiEvent($"WebMessageReceived EXCEPTION: {ex}");
+        }
+    }
+
+    // ClientSize (the actual WebView2 content area), NOT Size/Width/Height
+    // (the outer window bounds, title bar and borders included) — setting
+    // those instead would leave the page's #app canvas (sized to fill the
+    // window exactly, in either layout, with no page scroll) a few dozen
+    // pixels short in each dimension. Re-centers on the current screen after
+    // resizing (same as the constructor's StartPosition.CenterScreen gives
+    // the very first launch) so shrinking or growing the window can't leave
+    // it partially off-screen.
+    private void ApplyWindowSize(int width, int height)
+    {
+        if (width <= 0 || height <= 0) return;
+        ClientSize = new Size(width, height);
+        var workingArea = Screen.FromControl(this).WorkingArea;
+        Location = new Point(
+            workingArea.X + Math.Max(0, (workingArea.Width - Width) / 2),
+            workingArea.Y + Math.Max(0, (workingArea.Height - Height) / 2));
     }
 
     // localStorage is scoped per-origin, which includes the port — so the
