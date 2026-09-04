@@ -22,6 +22,22 @@
     --font-heading:'Caprasimo',Georgia,serif; --font-body:'Figtree','Trebuchet MS',system-ui,sans-serif;
     --radius-lg:26px; --radius-md:16px; --radius-sm:10px;
     --shadow-md:0 3px 10px rgba(46,43,37,.12); --shadow-lg:0 12px 32px rgba(46,43,37,.16);
+    /* ---- Workshop hub layout tokens (wide/1920x1080 values only — Phase 7
+       will redefine these under body[data-layout="compact"] for 1440x700
+       without touching any rule that reads them; every absolutely-positioned
+       Workshop-screen piece below reads var(--wk-*) instead of a literal
+       number so that later pass is a values-only swap). Source: the design
+       handoff's LAYOUTS.wide table. */
+    --wk-w:1920px; --wk-h:1080px; --wk-pad:36px; --wk-hud-top:32px; --wk-rep-w:460px;
+    --wk-icon-size:52px; --wk-title-pad:14px 56px; --wk-title-size:34px; --wk-kick-size:11px;
+    --wk-sign-top:138px; --wk-sign-w:230px; --wk-sign-h:83px; --wk-sign-gap:9px; --wk-handle-h:22px;
+    --wk-case-left:132px; --wk-case-top:196px; --wk-case-w:250px;
+    --wk-table-top:132px; --wk-table-w:560px; --wk-tab-h:34px; --wk-cell-gap:14px; --wk-table-pad:26px;
+    --wk-cell-radius:20px; --wk-plus-size:30px;
+    --wk-shelf-w:300px; --wk-shelf-bottom:262px; --wk-shelf-rows:4; --wk-shelf-pad:18px 20px; --wk-shelf-title:21px;
+    --wk-tray-h:238px; --wk-tray-tab-w:210px; --wk-tray-title:24px; --wk-tray-item-pad:12px 18px;
+    --wk-tray-icon:52px; --wk-tray-min-w:104px;
+    --wk-hud-num:24px; --wk-hud-icon:34px; --wk-gold-pad:10px 20px 10px 12px;
   }
   *{box-sizing:border-box;}
   body{
@@ -56,20 +72,22 @@
   #layout{max-width:1590px;margin:0 auto;padding:24px;display:flex;gap:20px;align-items:flex-start;}
   #debugPanel{width:170px;flex-shrink:0;position:sticky;top:24px;max-height:calc(100vh - 48px);overflow-y:auto;}
   #debugPanel:not(:empty){background:#f5ead8;border:1.5px solid var(--border);border-radius:var(--radius-md);padding:10px;box-shadow:var(--shadow-md);}
-  #app{flex:1;min-width:0;}
-  .gameGrid{display:grid;grid-template-columns:190px 1fr 292px;gap:24px;align-items:start;}
-  .navCol{display:flex;flex-direction:column;position:sticky;top:20px;}
-  .mainCol{display:flex;flex-direction:column;gap:16px;min-width:0;}
-  .sideCol{display:flex;flex-direction:column;gap:0;padding-top:2px;}
-  @media (max-width:880px){
-    .gameGrid{grid-template-columns:1fr;}
-    .navCol{position:static;order:-1;}
-    .navRow{flex-direction:row;flex-wrap:wrap;}
-    .navItem{width:calc(50% - 5px);}
+  /* #app is now the always-on Workshop root: one fixed-size, position:relative
+     canvas (sized via --wk-w/--wk-h, wide/1920x1080 values only this pass —
+     see the --wk-* token block up in :root) that every Workshop-screen piece
+     below positions itself inside via position:absolute + var(--wk-*)
+     tokens, plus the shared #modalRoot popout chain drawn on top of it.
+     Replaces the old 3-column .gameGrid/.navCol/.mainCol/.sideCol tab shell
+     (Workshop/Shop/Orders/Friends tabs + a nav rail) entirely — Shop/Orders/
+     Friends are popouts now (see state.shopOpen/ordersOpen/friendsOpen),
+     so there's no more tab content to lay out in columns. */
+  #layout{display:flex;gap:20px;align-items:flex-start;justify-content:center;}
+  #app{
+    position:relative;flex-shrink:0;overflow:hidden;
+    width:var(--wk-w);height:var(--wk-h);
+    border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);
   }
   h1{font:400 30px/1.1 var(--font-heading);text-align:left;margin:0;letter-spacing:0;color:var(--text);}
-  .pageHeading{display:grid;grid-template-columns:190px 1fr 292px;gap:24px;align-items:end;margin-bottom:20px;}
-  .pageHeading .logo{width:100%;height:auto;display:block;}
   .headerActions{display:flex;justify-content:flex-end;align-items:center;gap:10px;}
   .iconBtn{
     width:40px;height:40px;padding:0;border-radius:999px;flex-shrink:0;
@@ -81,6 +99,215 @@
   }
   .iconBtn img{width:40px;height:40px;object-fit:contain;}
   .iconBtn.muted{opacity:.45;}
+
+  /* =====================================================================
+     WORKSHOP HUB — the always-on root screen. Every class below is a new
+     piece from the design handoff (HUD/title plaque/icon row/hanging signs/
+     table wrap/display case/shelf/tray/toast + the new "wk" modal shell used
+     by the Shop/Orders/Friends/Display/Blades/Hammer-picker popouts). Sizing
+     reads var(--wk-*) tokens from :root so a later compact-layout pass is a
+     values-only redefinition under body[data-layout="compact"], no changes
+     needed here. Colors/radii/shadows reuse the existing --accent/--gold/
+     --green/--border/--radius-* tokens wherever they already match; a few
+     one-off values from the handoff (e.g. the sword-inventory/shelf panel's
+     specific cream backgrounds) are left literal since they don't correspond
+     to an existing token. ===================================================== */
+  .wkHud{position:absolute;top:var(--wk-hud-top);left:var(--wk-pad);display:flex;flex-direction:column;gap:8px;z-index:5;}
+  .wkHudRow{display:flex;gap:10px;}
+  .wkPill{
+    display:flex;align-items:center;gap:9px;background:var(--panel);border:2px solid var(--border);
+    border-radius:999px;padding:var(--wk-gold-pad);box-shadow:var(--shadow-md);
+  }
+  .wkPill img{width:var(--wk-hud-icon);height:var(--wk-hud-icon);object-fit:contain;}
+  .wkPillGem{font-size:calc(var(--wk-hud-num) * 1.05);line-height:1;}
+  .wkPillNum{font:700 var(--wk-hud-num)/1 var(--font-body);}
+  .wkPillNum.gold{color:var(--gold);}
+  .wkPillNum.mark{color:var(--mark);}
+  .wkWheelBtn{
+    display:flex;align-items:center;gap:8px;border-radius:999px;padding:10px 20px;
+    font:700 16px/1 var(--font-body);border:2px solid var(--accent);background:var(--accent);color:#fdf6ec;cursor:pointer;
+  }
+  .wkWheelBtn:hover:not(:disabled){background:var(--accent-600);color:#fdf6ec;}
+  .wkWheelBtn.cooling{border-color:var(--border);background:var(--panel);color:rgba(32,30,29,.6);}
+  .wkRepBar{
+    display:flex;align-items:center;gap:12px;background:var(--panel);border:2px solid var(--border);
+    border-radius:999px;padding:var(--wk-gold-pad);width:var(--wk-rep-w);box-shadow:var(--shadow-md);
+  }
+  .wkRepLabel{font:600 13px/1 var(--font-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);white-space:nowrap;}
+  .wkRepTrack{flex:1;height:12px;background:rgba(32,30,29,.14);border-radius:999px;overflow:hidden;position:relative;}
+  .wkRepFill{height:100%;background:var(--accent);transition:width .3s;}
+  .wkRepNum{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:600 10px/1 var(--font-body);color:var(--text);}
+
+  .wkTitlePlaque{
+    position:absolute;top:var(--wk-hud-top);left:50%;transform:translateX(-50%);z-index:5;
+    display:flex;flex-direction:column;align-items:center;gap:3px;background:var(--panel);border:2px solid var(--border);
+    border-radius:24px;padding:var(--wk-title-pad);box-shadow:var(--shadow-lg);
+  }
+  .wkTitleText{font:400 var(--wk-title-size)/1 var(--font-heading);color:var(--text);}
+  .wkKicker{font:600 var(--wk-kick-size)/1 var(--font-body);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);}
+
+  .wkIconRow{position:absolute;top:calc(var(--wk-hud-top) + 4px);right:var(--wk-pad);display:flex;gap:10px;z-index:5;}
+  .wkIconBtn{width:var(--wk-icon-size);height:var(--wk-icon-size);object-fit:contain;cursor:pointer;padding:0;border:none;background:transparent;}
+  .wkIconBtn.muted{opacity:.45;}
+
+  .wkSignCol{position:absolute;top:var(--wk-sign-top);right:calc(var(--wk-pad) - 2px);display:flex;flex-direction:column;gap:var(--wk-sign-gap);z-index:4;}
+  .wkSign{cursor:pointer;position:relative;}
+  .wkSignHandle{width:4px;height:var(--wk-handle-h);background:rgba(32,30,29,.45);border-radius:999px;margin:0 auto;}
+  .wkSignImgWrap{position:relative;}
+  .wkSignImg{width:var(--wk-sign-w);height:var(--wk-sign-h);object-fit:cover;display:block;border-radius:12px;box-shadow:var(--shadow-lg);}
+  .wkSignImg.glyph{
+    display:flex;align-items:center;justify-content:center;font-size:32px;color:#fdf6ec;
+    background:linear-gradient(180deg,var(--accent-600),var(--accent));
+  }
+  .wkSign:hover .wkSignImg{filter:brightness(1.08);}
+  .wkSignBadge{
+    position:absolute;top:-8px;right:-8px;min-width:28px;height:28px;padding:0 8px;border-radius:999px;
+    background:var(--danger);border:2px solid var(--bg);color:#fdf6ec;font:700 14px/24px var(--font-body);text-align:center;
+  }
+
+  .wkTableWrap{position:absolute;top:var(--wk-table-top);left:50%;transform:translateX(-50%);z-index:3;display:flex;flex-direction:column;align-items:center;gap:10px;}
+  .wkTableTabs{display:flex;gap:8px;}
+  .wkTableTab{
+    height:var(--wk-tab-h);padding:0 20px;font:700 12px/1 var(--font-body);letter-spacing:.06em;text-transform:uppercase;
+    border-radius:999px;cursor:pointer;border:2px solid var(--border);background:var(--panel);color:var(--text);
+  }
+  .wkTableTab.active{border-color:var(--accent);background:var(--accent);color:#fdf6ec;}
+  .wkTableLocked{
+    box-sizing:border-box;width:var(--wk-table-w);height:420px;border-radius:28px;background:rgba(245,234,216,.9);
+    border:3px dashed rgba(32,30,29,.3);display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:16px;padding:40px;text-align:center;box-shadow:var(--shadow-lg);
+  }
+  .wkTableLocked h3{font:400 28px/1.1 var(--font-heading);color:var(--text);margin:0;}
+  .wkFooterRow{display:flex;justify-content:center;gap:12px;flex-wrap:wrap;}
+  .wkPillStatus{
+    height:var(--wk-tab-h);padding:0 16px;font:600 13px/1 var(--font-body);letter-spacing:.1em;text-transform:uppercase;
+    color:#fdf6ec;background:rgba(32,30,29,.55);border-radius:999px;display:inline-flex;align-items:center;
+  }
+
+  .wkDisplayCase{
+    position:absolute;left:var(--wk-case-left);top:var(--wk-case-top);width:var(--wk-case-w);z-index:4;
+    display:flex;flex-direction:column;align-items:center;gap:0;cursor:pointer;
+  }
+  .wkCaseHook{width:50%;height:0;border-top:3px solid rgba(32,30,29,.5);border-radius:999px;}
+  .wkCaseBody{
+    box-sizing:border-box;width:100%;display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px 18px 20px;
+    border-radius:20px 20px 46px 46px;background:linear-gradient(180deg,rgba(245,234,216,.96),rgba(232,215,190,.96));
+    border:3px solid var(--gold);box-shadow:var(--shadow-lg);
+  }
+  .wkCaseKicker{font:600 10px/1 var(--font-body);letter-spacing:.16em;text-transform:uppercase;color:var(--muted);}
+  .wkCaseArtWrap{
+    position:relative;width:62%;height:0;padding-bottom:62%;border-radius:999px;
+    background:radial-gradient(circle,rgba(198,113,57,.3),rgba(198,113,57,0) 70%);
+  }
+  .wkCaseArtWrap img{position:absolute;top:11%;left:11%;width:78%;height:78%;object-fit:contain;filter:drop-shadow(0 3px 5px rgba(32,30,29,.45));}
+  .wkCaseEmpty{
+    width:62%;padding-bottom:62%;height:0;border-radius:999px;border:3px dashed rgba(140,73,26,.45);position:relative;
+  }
+  .wkCaseEmpty span{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:400 30px/1 var(--font-body);color:rgba(140,73,26,.6);}
+  .wkCaseName{font:600 15px/1.2 var(--font-body);text-align:center;}
+  .wkCaseMeta{font:400 11px/1.3 var(--font-body);text-align:center;color:var(--muted);}
+
+  .wkShelf{
+    position:absolute;left:var(--wk-pad);bottom:var(--wk-shelf-bottom);width:var(--wk-shelf-w);z-index:4;
+    background:var(--panel);border:2px solid var(--border);border-radius:24px;padding:var(--wk-shelf-pad);box-shadow:var(--shadow-lg);
+  }
+  .wkShelfTitle{font:400 var(--wk-shelf-title)/1 var(--font-heading);color:var(--text);margin-bottom:10px;}
+  .wkShelfRows{display:flex;flex-direction:column;gap:9px;}
+  .wkShelfRow{display:flex;align-items:center;gap:12px;}
+  .wkShelfRow img{width:38px;height:38px;object-fit:contain;}
+  .wkShelfName{font:600 14px/1.2 var(--font-body);}
+  .wkShelfMeta{font-size:11px;color:var(--muted);}
+  .wkShelfAllBtn{width:100%;margin-top:14px;height:36px;font:600 12px/1 var(--font-body);}
+
+  .wkTray{
+    position:absolute;left:0;right:0;bottom:0;height:var(--wk-tray-h);z-index:6;
+    background-image:url("backgrounds/workshop-panel-cloth.jpg");background-size:cover;background-position:center;
+    border-top:3px solid rgba(32,30,29,.35);box-shadow:0 -12px 32px rgba(46,43,37,.3);display:flex;
+  }
+  .wkTrayTabCol{width:var(--wk-tray-tab-w);flex-shrink:0;padding:21px 0 21px var(--wk-pad);display:flex;flex-direction:column;gap:6px;}
+  .wkTrayTab{
+    text-align:left;font:600 14px/1 var(--font-body);padding:11px 18px;border-radius:999px;cursor:pointer;
+    border:2px solid rgba(253,246,236,.4);background:rgba(245,234,216,.22);color:#fdf6ec;
+  }
+  .wkTrayTab.active{background:var(--accent);color:#fdf6ec;border-color:var(--accent);}
+  .wkTrayBody{flex:1;min-width:0;padding:21px var(--wk-pad) 21px 20px;display:flex;flex-direction:column;gap:10px;}
+  .wkTrayHeader{display:flex;align-items:baseline;gap:14px;}
+  .wkTrayTitle{font:400 var(--wk-tray-title)/1 var(--font-heading);color:#fdf6ec;text-shadow:0 2px 4px rgba(32,30,29,.6);}
+  .wkTrayHint{font-size:13px;color:rgba(253,246,236,.85);text-shadow:0 1px 3px rgba(32,30,29,.6);}
+  .wkTrayItems{display:flex;gap:14px;flex-wrap:wrap;overflow:hidden;}
+  .wkTrayItem{
+    display:flex;flex-direction:column;align-items:center;gap:5px;padding:var(--wk-tray-item-pad);min-width:var(--wk-tray-min-w);
+    background:rgba(245,234,216,.94);border:2px solid var(--border);border-radius:18px;cursor:pointer;box-shadow:var(--shadow-md);
+  }
+  .wkTrayItem.selected{border-color:var(--accent);background:var(--accent-100);box-shadow:0 0 0 4px rgba(198,113,57,.28);}
+  .wkTrayItem.empty{opacity:.45;}
+  .wkTrayItem img{width:var(--wk-tray-icon);height:var(--wk-tray-icon);object-fit:contain;}
+  .wkTrayItem .name{font:600 13px/1 var(--font-body);color:var(--text);}
+  .wkTrayItem .count{font:700 15px/1 var(--font-body);color:var(--gold);}
+
+  .wkToast{
+    position:absolute;top:var(--wk-table-top);left:50%;transform:translateX(-50%);z-index:120;
+    background:var(--accent-100);border:2px solid var(--accent);color:var(--gold);padding:11px 24px;border-radius:999px;
+    font:700 16px/1 var(--font-body);box-shadow:var(--shadow-lg);
+  }
+
+  /* New popout shell for Shop/Orders/Friends/Display/Blades/Hammer-picker —
+     deliberately a PARALLEL set of classes rather than restyling the shared
+     .modalBackdrop/.modalCard (still used by Mines/Catalog/Settings/
+     Achievements/Wheel/Tutorial/Profile/Expeditions, all deferred to a later
+     pass) so those keep rendering exactly as they do today. */
+  .wkModalBackdrop{position:fixed;inset:0;background:rgba(32,30,29,.55);display:flex;align-items:center;justify-content:center;z-index:100;padding:50px;}
+  .wkModalCard{
+    box-sizing:border-box;background:var(--bg);border:2px solid var(--border);border-radius:32px;padding:30px 32px;
+    width:860px;max-width:100%;max-height:100%;overflow:hidden;display:flex;flex-direction:column;box-shadow:var(--shadow-lg);
+  }
+  .wkModalCard.w1000{width:1000px;}
+  .wkModalCard.w860{width:860px;}
+  .wkModalCard.w760{width:760px;}
+  .wkModalHead{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:18px;flex-shrink:0;}
+  .wkModalTitle{font:400 32px/1 var(--font-heading);color:var(--text);}
+  .wkModalBlurb{font-size:13px;color:var(--muted);margin-top:6px;}
+  .wkModalClose{height:44px;padding:0 22px;font:600 14px/1 var(--font-body);flex-shrink:0;}
+  .wkModalBody{display:flex;flex-direction:column;gap:10px;overflow-y:auto;overflow-x:hidden;}
+
+  .wkBtn{height:44px;padding:0 20px;font:600 14px/1 var(--font-body);border-radius:999px;border:2px solid var(--border);background:transparent;color:var(--text);cursor:pointer;}
+  .wkBtn:hover:not(:disabled){border-color:var(--accent);color:var(--gold);background:rgba(198,113,57,.08);}
+  .wkBtnPri{height:44px;padding:0 22px;font:700 14px/1 var(--font-body);border-radius:999px;border:2px solid var(--accent);background:var(--accent);color:#fdf6ec;cursor:pointer;}
+  .wkBtnPri:hover:not(:disabled){background:var(--accent-600);}
+  .wkBtn:disabled,.wkBtnPri:disabled{opacity:.45;cursor:not-allowed;}
+
+  .wkShopRow{
+    display:flex;justify-content:space-between;align-items:center;background:rgba(245,234,216,.6);
+    border:2px solid var(--border);border-radius:18px;padding:14px 20px;gap:14px;flex-wrap:wrap;
+  }
+  .wkShopRow.marks{background:var(--green-bg);border-color:var(--green-border);}
+  .wkShopRow img{width:44px;height:44px;object-fit:contain;}
+
+  .wkOrderCard{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;border-radius:18px;padding:16px 20px;background:rgba(245,234,216,.6);border:2px solid var(--border);}
+  .wkOrderCard.fulfillable{background:var(--green-bg);border-color:var(--green-border);}
+
+  .wkFriendCard{background:rgba(245,234,216,.6);border:2px solid var(--border);border-radius:20px;padding:16px 20px;display:flex;flex-direction:column;gap:12px;}
+  .wkFriendTop{display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+  .wkFriendAvatar{width:46px;height:46px;border-radius:999px;background:var(--accent-100);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font:700 16px/1 var(--font-body);color:var(--gold);}
+  .wkFriendDots{display:flex;gap:6px;}
+
+  .wkDisplayRow{display:flex;align-items:center;gap:14px;padding:14px;border-radius:18px;cursor:pointer;background:rgba(245,234,216,.6);border:2px solid var(--border);}
+  .wkDisplayRow img{width:48px;height:48px;object-fit:contain;flex-shrink:0;}
+  .wkDisplayBonus{font:700 13px/1 var(--font-body);color:var(--green);background:var(--green-bg);border:2px solid var(--green-border);border-radius:999px;padding:9px 14px;white-space:nowrap;flex-shrink:0;}
+
+  .wkBladeRow{display:flex;align-items:center;gap:12px;background:rgba(245,234,216,.6);border:2px solid var(--border);border-radius:18px;padding:12px;}
+  .wkBladeRow img{width:46px;height:46px;object-fit:contain;flex-shrink:0;}
+
+  .wkHammerGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+  .wkHammerCard{
+    display:flex;flex-direction:column;align-items:center;gap:6px;padding:16px 12px;border-radius:18px;cursor:pointer;
+    background:rgba(245,234,216,.6);border:2px solid var(--border);text-align:center;
+  }
+  .wkHammerCard img{width:52px;height:72px;object-fit:contain;}
+  .wkHammerCard.disabled{opacity:.4;cursor:not-allowed;filter:grayscale(.6);}
+  .wkHammerCard .name{font:700 15px/1 var(--font-body);}
+  .wkHammerCard .count{font:600 13px/1 var(--font-body);color:var(--gold);}
+  .wkHammerCard .desc{font-size:11px;color:var(--muted);line-height:1.4;}
   .statbar{
     display:flex;flex-wrap:wrap;gap:14px;background:rgba(245,234,216,.95);border:1.5px solid var(--border);
     border-radius:999px;padding:10px 20px;margin-bottom:16px;font-size:12px;align-items:center;
@@ -241,28 +468,33 @@
        a cooking/ready overlay's min-content could still force this whole
        box to grow even after those two are fixed, just one layer further out. */
     min-width:0;min-height:0;
-    position:relative;display:grid;gap:8px;margin:6px 8px 30px;padding:10px;border-radius:var(--radius-md);
-    background-size:100% 100%;background-position:center;background-repeat:no-repeat;
+    position:relative;display:grid;gap:var(--wk-cell-gap);margin:0;padding:var(--wk-table-pad);border-radius:26px;
+    background-size:100% 100%;background-position:center;background-repeat:no-repeat;box-shadow:var(--shadow-lg);
   }
   .gridCell{
-    aspect-ratio:1;border-radius:14px;display:flex;align-items:center;justify-content:center;
+    aspect-ratio:1;border-radius:var(--wk-cell-radius);display:flex;align-items:center;justify-content:center;
     cursor:pointer;font:700 11px/1 var(--font-body);transition:transform .1s,background .12s,box-shadow .12s;
   }
   .gridCell:hover{transform:scale(1.05);}
-  .gridCell.empty{border:2px dashed var(--border-dash);background:rgba(255,242,235,.55);color:var(--accent);font-size:18px;font-weight:400;}
-  .gridCell.filled{border:2px solid var(--accent);background:var(--accent-100);color:var(--gold);}
+  .gridCell.empty{border:3px dashed rgba(198,113,57,.5);background:rgba(255,242,235,.5);color:var(--accent);font:400 var(--wk-plus-size)/1 var(--font-body);}
+  .gridCell.filled{border:3px solid var(--accent);background:#fff2eb;color:var(--gold);}
   .gridCell.filled img{width:68%;height:68%;object-fit:contain;filter:drop-shadow(0 2px 3px rgba(32,30,29,.3));}
-  .gridCell.cooking{border:2px dashed rgba(140,73,26,.4);background:rgba(255,242,235,.4);cursor:default;}
+  .gridCell.cooking{border:3px dashed rgba(140,73,26,.4);background:rgba(255,242,235,.38);cursor:default;}
   .gridCell.cooking:hover{transform:none;}
   /* Positioned as a grid item spanning exactly the two cells it fires (via inline
      grid-row/grid-column), so it always lands precisely on their shared border
      regardless of grid size or gap — no percentage math to get subtly wrong. */
   .fireBtn{
-    place-self:center;padding:0 12px;height:24px;font-size:10px;
+    place-self:center;padding:0 20px;height:40px;font:700 15px/1 var(--font-body);
     border-radius:999px;background:var(--accent);border-color:var(--accent);color:#fdf6ec;
-    font-weight:700;box-shadow:var(--shadow-md);z-index:5;white-space:nowrap;
+    box-shadow:var(--shadow-lg);z-index:5;white-space:nowrap;cursor:pointer;
   }
   .fireBtn:hover{background:var(--accent-600);color:#fdf6ec;}
+  /* A pair of two DIFFERENT materials fuses instead of firing straight — same
+     green treatment as a fulfillable order card, so "this makes something new"
+     reads at a glance before the button is even pressed. */
+  .fireBtn.fuse{background:var(--green);border-color:var(--green);}
+  .fireBtn.fuse:hover{filter:brightness(1.1);background:var(--green);}
   /* Always-on now (not hover-revealed) — a cooking pair should read as obviously
      "something is happening here" at a glance, same as the ready-craft overlay below. */
   /* position:absolute (with inset:0) takes this fully out of the grid's
@@ -280,12 +512,12 @@
      sizing algorithm entirely sidesteps that whole chain. */
   .cookProgress{
     position:absolute;inset:0;
-    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;
-    padding:8px;border-radius:14px;background:rgba(245,234,216,.97);border:1.5px solid var(--accent);
-    box-shadow:var(--shadow-md);z-index:6;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;
+    padding:14px;border-radius:var(--wk-cell-radius);background:rgba(245,234,216,.97);border:3px solid var(--accent);
+    box-shadow:var(--shadow-md);z-index:6;overflow:hidden;
   }
   .cookProgress .progresswrap{width:100%;}
-  .cookProgress button{height:22px;padding:0 10px;font-size:10px;}
+  .cookProgress button{height:34px;padding:0 13px;font-size:12px;}
   .oreChipRow{display:flex;gap:3px;flex-wrap:wrap;justify-content:center;}
   .oreChipBadge{
     display:inline-flex;align-items:center;justify-content:center;padding:2px;border-radius:999px;
@@ -323,12 +555,12 @@
      "Hammer"/"Collect" buttons are the thing that used to inflate the grid. */
   .readyActions{
     position:absolute;inset:0;
-    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;
-    padding:8px;border-radius:14px;background:rgba(245,234,216,.97);border:1.5px solid var(--green-border);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;
+    padding:12px;border-radius:var(--wk-cell-radius);background:rgba(245,234,216,.97);border:3px solid var(--green-border);
     box-shadow:var(--shadow-md);z-index:6;
   }
   .readyActions .row{justify-content:center;}
-  .readyActions button{height:22px;padding:0 10px;font-size:10px;}
+  .readyActions button{height:38px;padding:0 16px;font-size:13px;}
   .hammerBtn{background:var(--green);border-color:var(--green);color:#fdf6ec;font-weight:700;}
   .hammerBtn:hover{filter:brightness(1.1);background:var(--green);color:#fdf6ec;}
   /* The radial menu is a fixed-pixel-radius popover, not sized off the grid, so its
@@ -849,6 +1081,11 @@ const FUSION = {};
 // if a given name has no art yet (SWORD_SPRITE_FALLBACK) so a future sword
 // added without matching art doesn't break the popup.
 const SWORD_SPRITE_FALLBACK = 'swords/fusion/01_Bronzefang.png';
+// Small shared lookup for the shelf/tray/display-case/Blades-modal/Display-
+// picker markup below (ui-overhaul) — same fallback rule renderNewSwordPopup()
+// already used inline (SWORD_SPRITE[sword.name] || SWORD_SPRITE_FALLBACK),
+// just named so it isn't repeated at every new call site.
+function swordArt(s){ return SWORD_SPRITE[s.name] || SWORD_SPRITE_FALLBACK; }
 const SWORD_SPRITE = {
   'Copper Sword':'swords/copper/01_Copper_Sword.png', 'The Fang':'swords/copper/02_The_Fang.png',
   'Crimson Sword':'swords/copper/03_Crimson_Sword.png', 'Sawblade':'swords/copper/04_Sawblade.png',
@@ -1167,6 +1404,7 @@ function checkDailyLogin(){
   state.mineOpen=false; state.catalogOpen=false; state.settingsOpen=false; state.hammerInventoryOpen=false;
   state.swordInventoryModalOpen=false; state.tutorialOpen=false; state.achievementsOpen=false; state.wheelOpen=false;
   state.newSwordPopup=null; state.expeditionsOpen=false; state.profileOpen=false;
+  closeExtraModals();
 }
 function claimDailyLogin(){
   const popup = state.dailyRewardPopup;
@@ -1999,6 +2237,27 @@ const state = {
   catalogOpen:false,
   selectedCatalogMatId:null,
   openHammerRadial:null,
+  // ---- Workshop hub (ui-overhaul) ----
+  // Shop/Orders/Friends used to be tab content (state.tab); they're popouts
+  // now, same not-persisted "modal-open flag" convention as mineOpen/
+  // catalogOpen above.
+  shopOpen:false,
+  ordersOpen:false,
+  friendsOpen:false,
+  // The display case's own picker popout (see mountDisplay()/unmountDisplay()
+  // below). state.display itself (the actual mounted sword, if any) IS
+  // persisted — see serializeState()/loadGame() — this open/closed flag is
+  // not, same as every other modal-open flag on this list.
+  displayOpen:false,
+  display:null,
+  // Which crafting table is showing on the always-on Workshop screen right
+  // now (the new hanging-sign shell shows one table at a time via tabs
+  // instead of both stations side-by-side) — transient UI state, not
+  // persisted, same reasoning as selectedMineId/selectedCatalogMatId above.
+  activeWorkshopTable:0,
+  // Which tab is open in the bottom context tray (Ore rack / Hammers /
+  // Blades) — transient UI state, not persisted.
+  tray:'ore',
   mines:[
     // Unlocked from business level 1 (i.e. immediately) \u2014 a small guaranteed
     // trickle of the one ore every player already has some of, so nobody can
@@ -2038,6 +2297,12 @@ function serializeState(){
     catalog: Object.fromEntries(Object.entries(state.catalog).map(([id,set])=>[id, Array.from(set)])),
     fusionCatalog: Array.from(state.fusionCatalog),
     inventory: state.inventory,
+    // The mounted display-case sword — a real sword object, structurally
+    // identical to an inventory entry, just held outside state.inventory
+    // while displayed (see mountDisplay()/unmountDisplay()). null when the
+    // case is empty. Persisted like inventory itself; existing saves with
+    // no display field at all safely default to null on load below.
+    display: state.display,
     stations: state.stations,
     orders: state.orders,
     guaranteedOrder: state.guaranteedOrder,
@@ -2327,6 +2592,7 @@ async function loadGame(){
     }
     state.fusionCatalog = new Set(data.fusionCatalog||[]);
     if(data.inventory) state.inventory = data.inventory;
+    state.display = data.display ?? null;
     if(data.stations){
       state.stations = data.stations;
       // Backfill smithHitBy for saves from before it existed: a craft whose old
@@ -2441,7 +2707,7 @@ function toggleMuted(){ state.muted = !state.muted; musicPlayerA.muted = state.m
 function toggleSettings(){
   state.settingsOpen = !state.settingsOpen;
   state.settingsResetConfirm = false; // never leave the confirm step open across a close/reopen
-  if(state.settingsOpen){ state.mineOpen=false; state.catalogOpen=false; state.hammerInventoryOpen=false; state.swordInventoryModalOpen=false; state.tutorialOpen=false; state.achievementsOpen=false; state.wheelOpen=false; state.newSwordPopup=null; state.dailyRewardPopup=null; state.expeditionsOpen=false; state.profileOpen=false; }
+  if(state.settingsOpen){ state.mineOpen=false; state.catalogOpen=false; state.hammerInventoryOpen=false; state.swordInventoryModalOpen=false; state.tutorialOpen=false; state.achievementsOpen=false; state.wheelOpen=false; state.newSwordPopup=null; state.dailyRewardPopup=null; state.expeditionsOpen=false; state.profileOpen=false; closeExtraModals(); }
   render();
 }
 // Player-facing reset, reachable from Settings — distinct from debugResetGame()
@@ -2453,7 +2719,7 @@ function cancelResetGameProfile(){ state.settingsResetConfirm = false; render();
 async function confirmResetGameProfile(){ isResetting = true; await clearSave(); location.reload(); }
 function toggleAchievements(){
   state.achievementsOpen = !state.achievementsOpen;
-  if(state.achievementsOpen){ state.mineOpen=false; state.catalogOpen=false; state.hammerInventoryOpen=false; state.swordInventoryModalOpen=false; state.tutorialOpen=false; state.settingsOpen=false; state.wheelOpen=false; state.newSwordPopup=null; state.dailyRewardPopup=null; state.expeditionsOpen=false; state.profileOpen=false; }
+  if(state.achievementsOpen){ state.mineOpen=false; state.catalogOpen=false; state.hammerInventoryOpen=false; state.swordInventoryModalOpen=false; state.tutorialOpen=false; state.settingsOpen=false; state.wheelOpen=false; state.newSwordPopup=null; state.dailyRewardPopup=null; state.expeditionsOpen=false; state.profileOpen=false; closeExtraModals(); }
   render();
 }
 function closeAchievements(){ state.achievementsOpen = false; render(); }
@@ -2465,7 +2731,7 @@ function closeAchievements(){ state.achievementsOpen = false; render(); }
 // buried under Settings' unrelated audio/save controls.
 function toggleProfile(){
   state.profileOpen = !state.profileOpen;
-  if(state.profileOpen){ state.mineOpen=false; state.catalogOpen=false; state.hammerInventoryOpen=false; state.swordInventoryModalOpen=false; state.tutorialOpen=false; state.settingsOpen=false; state.achievementsOpen=false; state.wheelOpen=false; state.newSwordPopup=null; state.dailyRewardPopup=null; state.expeditionsOpen=false; }
+  if(state.profileOpen){ state.mineOpen=false; state.catalogOpen=false; state.hammerInventoryOpen=false; state.swordInventoryModalOpen=false; state.tutorialOpen=false; state.settingsOpen=false; state.achievementsOpen=false; state.wheelOpen=false; state.newSwordPopup=null; state.dailyRewardPopup=null; state.expeditionsOpen=false; closeExtraModals(); }
   render();
 }
 function closeProfile(){ state.profileOpen = false; render(); }
@@ -2485,6 +2751,7 @@ function openTutorial(){
   state.tutorialStep = 0;
   state.tutorialOpen = true;
   state.mineOpen=false; state.catalogOpen=false; state.settingsOpen=false; state.hammerInventoryOpen=false; state.swordInventoryModalOpen=false; state.achievementsOpen=false; state.wheelOpen=false; state.newSwordPopup=null; state.dailyRewardPopup=null; state.expeditionsOpen=false; state.profileOpen=false;
+  closeExtraModals();
   render();
 }
 function closeTutorial(){ state.tutorialOpen = false; render(); }
@@ -2685,14 +2952,20 @@ function fulfillOrder(orderId){
   if(order.isFusion) reward = Math.round(reward * (1 + (FUSION_RANK_BONUS[sword.rank]||0)));
   if(sword.saleBonus) reward = Math.round(reward*1.2);
   state.gold += reward;
-  gainRep(order.rewardRep);
+  // Display-case reputation bonus (see repBonusPct()) — a multiplier on the
+  // reputation this order pays out, applied only while a blade is mounted;
+  // which specific sword fulfills THIS order doesn't matter, only what's on
+  // display right now.
+  const displayBonusActive = !!state.display;
+  const repAward = displayBonusActive ? Math.round(order.rewardRep * (1 + repBonusPct(state.display)/100)) : order.rewardRep;
+  gainRep(repAward);
   state.stats.ordersFulfilled++;
   // A small mark trickle for fusion swords specifically, awarded on the order
   // that actually pays out for one — not at craft/collect time, so it can't
   // be farmed by crafting fusion swords and never selling them.
   let markNote = '';
   if(sword.fusion){ state.marks += 1; markNote = ' (+1 forge mark)'; }
-  setToast(order.requester+' takes the '+sword.name+' and pays '+reward.toLocaleString()+' gold!'+markNote);
+  setToast(order.requester+' takes the '+sword.name+' and pays '+reward.toLocaleString()+' gold!'+markNote+(displayBonusActive?' (display bonus)':''));
   if(order.guaranteed){
     state.guaranteedOrder = null;
   } else {
@@ -3170,6 +3443,7 @@ function showNewSwordPopup(sword){
   state.mineOpen=false; state.catalogOpen=false; state.settingsOpen=false; state.hammerInventoryOpen=false;
   state.swordInventoryModalOpen=false; state.tutorialOpen=false; state.achievementsOpen=false; state.wheelOpen=false;
   state.dailyRewardPopup=null; state.expeditionsOpen=false; state.profileOpen=false;
+  closeExtraModals();
   playSwordDiscoverySfx();
 }
 function closeNewSwordPopup(){ state.newSwordPopup = null; render(); }
@@ -3184,6 +3458,7 @@ function viewNewSwordInCatalog(){
   state.mineOpen=false; state.settingsOpen=false; state.hammerInventoryOpen=false;
   state.swordInventoryModalOpen=false; state.tutorialOpen=false; state.achievementsOpen=false; state.wheelOpen=false;
   state.dailyRewardPopup=null; state.expeditionsOpen=false; state.profileOpen=false;
+  closeExtraModals();
   selectCatalogMat(sword.fusion ? 'fusion' : sword.materialId);
 }
 
@@ -3250,6 +3525,11 @@ function toggleHammerRadial(stationIdx, craftId){
   if(open && open.stationIdx===stationIdx && open.craftId===craftId){
     state.openHammerRadial = null;
   } else {
+    // Now a modal (see renderHammerPickerModal) rather than a wedge menu
+    // anchored to the ready card — same mutual-exclusion convention as
+    // every other modal-opening toggle here.
+    closeCoreModals();
+    state.shopOpen=false; state.ordersOpen=false; state.friendsOpen=false; state.displayOpen=false;
     state.openHammerRadial = {stationIdx, craftId};
   }
   render();
@@ -3760,6 +4040,7 @@ async function visitFriend(id){
   state.mineOpen=false; state.catalogOpen=false; state.settingsOpen=false; state.hammerInventoryOpen=false;
   state.swordInventoryModalOpen=false; state.tutorialOpen=false; state.achievementsOpen=false; state.wheelOpen=false;
   state.expeditionsOpen=false; state.profileOpen=false;
+  closeExtraModals();
   render();
   const snapshot = await fetchFriendSnapshot(id);
   const friend = state.friends.find(f=>f.id===id);
@@ -3770,7 +4051,7 @@ async function visitFriend(id){
   // newer/cleared view.
   if(state.visitingFriendId===id) render();
 }
-function leaveVisit(){ state.visitingFriendId = null; state.visitingFriendData = null; render(); }
+function leaveVisit(){ state.visitingFriendId = null; state.visitingFriendData = null; state.friendsOpen = true; render(); }
 // A friend's snapshot only ever updates on THEIR ~90s sync interval (see
 // syncStationSnapshot()) — re-fetching without leaving the visit lets a
 // player check "did they start something yet?" without a leave/re-enter
@@ -3963,6 +4244,7 @@ function openWheel(){
   state.lastSpinAt = Date.now();
   state.stats.wheelSpins++;
   state.mineOpen=false; state.catalogOpen=false; state.settingsOpen=false; state.hammerInventoryOpen=false; state.swordInventoryModalOpen=false; state.tutorialOpen=false; state.achievementsOpen=false; state.wheelOpen=false; state.newSwordPopup=null; state.dailyRewardPopup=null; state.expeditionsOpen=false; state.profileOpen=false;
+  closeExtraModals();
   state.wheelOpen = true;
   state.wheelSpinning = true;
   if(!state.wheelRotationDeg) state.wheelRotationDeg = 0;
@@ -4071,6 +4353,30 @@ function scrapValueFor(s){
   if(s.saleBonus) refund = Math.round(refund*1.2);
   return refund;
 }
+// ---- Display-case reputation bonus (ui-overhaul, new mechanic) ----
+// Ported from the design handoff's repBonusPct() exactly (copper D = +1% up
+// to platinum A = +50%, capped there; a fusion scores off its RARER
+// material so a top-tier fusion sits at the cap rather than below a mid-tier
+// single) but scored against the REAL rank scale/material order instead of
+// the handoff's own placeholder ones:
+//  - rank: RANK_ORDER (['D','C','B','A','M'], already exists for fusion-rank
+//    comparisons elsewhere) capped at MAX_REGULAR_RANK_IDX (index of 'A') —
+//    same "M counts the same as A" cap the handoff's own RANKS.indexOf
+//    (5-entry, M included) already implied.
+//  - material: MATERIALS' real 7-entry order (copper..platinum). A fusion
+//    sword's materialId is a sorted "a|b" key (see fusionKey()), NOT
+//    pre-ordered by rarity, so this picks whichever of the pair has the
+//    higher MATERIALS tier rather than assuming pair[1] is the rarer one.
+const MAX_REGULAR_RANK_IDX = RANK_ORDER.indexOf('A');
+function repBonusPct(sword){
+  const rankIdx = Math.min(MAX_REGULAR_RANK_IDX, RANK_ORDER.indexOf(sword.rank));
+  const mat = sword.fusion
+    ? sword.materialId.split('|').reduce((best,id)=> matById(id).tier>matById(best).tier ? id : best)
+    : sword.materialId;
+  const matIdx = MATERIALS.findIndex(m=>m.id===mat);
+  const idx = matIdx*4 + rankIdx;
+  return Math.max(1, Math.min(50, Math.round(1 + idx*(49/27))));
+}
 // First click on a Scrap button — same inline "ask once" pattern as
 // requestResetGameProfile(), just per-row instead of one global flag, since
 // there can be several swords in the list at once. Only ever one row's
@@ -4099,7 +4405,74 @@ function setTab(t){
   if(t==='friends') refreshFriendsRoster();
   render();
 }
-function toggleMineOverview(){ state.mineOpen = !state.mineOpen; if(state.mineOpen){ state.catalogOpen=false; state.settingsOpen=false; state.hammerInventoryOpen=false; state.swordInventoryModalOpen=false; state.tutorialOpen=false; state.achievementsOpen=false; state.wheelOpen=false; state.newSwordPopup=null; state.dailyRewardPopup=null; state.expeditionsOpen=false; state.profileOpen=false; } render(); }
+// New (ui-overhaul) modal-open flags that every existing toggle*()/open*()
+// function's own "close everything else" block above needs to also close —
+// otherwise opening e.g. Mines while the Shop popout is open would leave
+// state.shopOpen stuck true underneath, and closing Mines again would
+// incorrectly resurface Shop. A single shared helper instead of hand-editing
+// each of those ~14 call sites' existing inline flag lists (safer than
+// threading 5 more flags through each one by hand).
+function closeExtraModals(){
+  state.shopOpen=false; state.ordersOpen=false; state.friendsOpen=false; state.displayOpen=false; state.openHammerRadial=null;
+}
+// The mirror image of closeExtraModals() above — every PRE-existing modal-open
+// flag, for the new Shop/Orders/Friends/Display/Hammer-picker toggles below to
+// close when THEY open, same mutual-exclusion convention as every toggle*()
+// function on this list follows.
+function closeCoreModals(){
+  state.mineOpen=false; state.catalogOpen=false; state.settingsOpen=false; state.hammerInventoryOpen=false;
+  state.swordInventoryModalOpen=false; state.tutorialOpen=false; state.achievementsOpen=false; state.wheelOpen=false;
+  state.newSwordPopup=null; state.dailyRewardPopup=null; state.expeditionsOpen=false; state.profileOpen=false;
+}
+function toggleShopOpen(){
+  const opening = !state.shopOpen;
+  closeCoreModals(); closeExtraModals();
+  state.shopOpen = opening;
+  render();
+}
+function closeShopOpen(){ state.shopOpen = false; render(); }
+function toggleOrdersOpen(){
+  const opening = !state.ordersOpen;
+  closeCoreModals(); closeExtraModals();
+  state.ordersOpen = opening;
+  if(opening) ensureGuaranteedOrder();
+  render();
+}
+function closeOrdersOpen(){ state.ordersOpen = false; render(); }
+function toggleFriendsOpen(){
+  const opening = !state.friendsOpen;
+  closeCoreModals(); closeExtraModals();
+  state.friendsOpen = opening;
+  if(opening) refreshFriendsRoster(); // not awaited — same reasoning as setTab()'s old 'friends' branch
+  render();
+}
+function closeFriendsOpen(){ state.friendsOpen = false; render(); }
+// ---- Display case ----
+function mountDisplay(swordId){
+  const idx = state.inventory.findIndex(s=>s.id===swordId);
+  if(idx<0) return;
+  const [sword] = state.inventory.splice(idx,1);
+  state.display = sword;
+  state.displayOpen = false;
+  setToast('Mounted '+sword.name+' in the display case.');
+  render();
+}
+function unmountDisplay(){
+  if(!state.display) return;
+  const sword = state.display;
+  state.inventory.push(sword);
+  state.display = null;
+  setToast('Took '+sword.name+' down from the display case.');
+  render();
+}
+function toggleDisplayOverview(){
+  const opening = !state.displayOpen;
+  closeCoreModals(); closeExtraModals();
+  state.displayOpen = opening;
+  render();
+}
+function closeDisplayOverview(){ state.displayOpen = false; render(); }
+function toggleMineOverview(){ state.mineOpen = !state.mineOpen; if(state.mineOpen){ state.catalogOpen=false; state.settingsOpen=false; state.hammerInventoryOpen=false; state.swordInventoryModalOpen=false; state.tutorialOpen=false; state.achievementsOpen=false; state.wheelOpen=false; state.newSwordPopup=null; state.dailyRewardPopup=null; state.expeditionsOpen=false; state.profileOpen=false; closeExtraModals(); } render(); }
 function closeMineOverview(){ state.mineOpen = false; render(); }
 function selectMine(id){ state.selectedMineId = state.selectedMineId===id ? null : id; render(); }
 function collectMineOre(id){
@@ -4114,7 +4487,7 @@ function collectMineOre(id){
   setToast(mine.icon+' Collected '+summary+' ore from '+mine.name+'!');
   render();
 }
-function toggleCatalogOverview(){ state.catalogOpen = !state.catalogOpen; if(state.catalogOpen){ state.mineOpen=false; state.settingsOpen=false; state.hammerInventoryOpen=false; state.swordInventoryModalOpen=false; state.tutorialOpen=false; state.achievementsOpen=false; state.wheelOpen=false; state.newSwordPopup=null; state.dailyRewardPopup=null; state.expeditionsOpen=false; state.profileOpen=false; } render(); }
+function toggleCatalogOverview(){ state.catalogOpen = !state.catalogOpen; if(state.catalogOpen){ state.mineOpen=false; state.settingsOpen=false; state.hammerInventoryOpen=false; state.swordInventoryModalOpen=false; state.tutorialOpen=false; state.achievementsOpen=false; state.wheelOpen=false; state.newSwordPopup=null; state.dailyRewardPopup=null; state.expeditionsOpen=false; state.profileOpen=false; closeExtraModals(); } render(); }
 function toggleExpeditionsOverview(){
   // The nav button is always visible now (was hidden below level 8) — this
   // is what actually gates access. Never even flips expeditionsOpen to true
@@ -4130,6 +4503,7 @@ function toggleExpeditionsOverview(){
     state.mineOpen=false; state.catalogOpen=false; state.settingsOpen=false; state.hammerInventoryOpen=false;
     state.swordInventoryModalOpen=false; state.tutorialOpen=false; state.achievementsOpen=false; state.wheelOpen=false;
     state.newSwordPopup=null; state.dailyRewardPopup=null; state.profileOpen=false;
+    closeExtraModals();
   }
   render();
 }
@@ -4138,7 +4512,7 @@ function toggleExpeditionsOverview(){
 // overlays, just triggered from a plain button instead of a tab icon.
 function toggleHammerInventory(){
   state.hammerInventoryOpen = !state.hammerInventoryOpen;
-  if(state.hammerInventoryOpen){ state.mineOpen=false; state.catalogOpen=false; state.settingsOpen=false; state.swordInventoryModalOpen=false; state.tutorialOpen=false; state.achievementsOpen=false; state.wheelOpen=false; state.newSwordPopup=null; state.dailyRewardPopup=null; state.expeditionsOpen=false; state.profileOpen=false; }
+  if(state.hammerInventoryOpen){ state.mineOpen=false; state.catalogOpen=false; state.settingsOpen=false; state.swordInventoryModalOpen=false; state.tutorialOpen=false; state.achievementsOpen=false; state.wheelOpen=false; state.newSwordPopup=null; state.dailyRewardPopup=null; state.expeditionsOpen=false; state.profileOpen=false; closeExtraModals(); }
   render();
 }
 // The sidebar inventory list is capped (see renderInventoryPanel) so it can
@@ -4147,7 +4521,7 @@ function toggleHammerInventory(){
 // catalog/hammer overlays above.
 function toggleInventoryModal(){
   state.swordInventoryModalOpen = !state.swordInventoryModalOpen;
-  if(state.swordInventoryModalOpen){ state.mineOpen=false; state.catalogOpen=false; state.settingsOpen=false; state.hammerInventoryOpen=false; state.tutorialOpen=false; state.achievementsOpen=false; state.wheelOpen=false; state.newSwordPopup=null; state.dailyRewardPopup=null; state.expeditionsOpen=false; state.profileOpen=false; }
+  if(state.swordInventoryModalOpen){ state.mineOpen=false; state.catalogOpen=false; state.settingsOpen=false; state.hammerInventoryOpen=false; state.tutorialOpen=false; state.achievementsOpen=false; state.wheelOpen=false; state.newSwordPopup=null; state.dailyRewardPopup=null; state.expeditionsOpen=false; state.profileOpen=false; closeExtraModals(); }
   render();
 }
 function closeCatalogOverview(){ state.catalogOpen = false; render(); }
@@ -4205,12 +4579,31 @@ function setShopSubTab(t){ state.shopSubTab = t; render(); }
 // well, without rebuilding the pricing/UI groundwork from scratch.
 function renderShop(){
   const sub = state.shopSubTab==='marks' ? 'marks' : 'ore';
-  const switcher = `<div class="row" style="gap:8px;margin-bottom:14px;">
+  const switcher = `<div class="row" style="gap:8px;">
     <button class="${sub==='ore'?'primary':''}" onclick="setShopSubTab('ore')">Ore shop</button>
     <button class="${sub==='marks'?'primary':''}" onclick="setShopSubTab('marks')">Forge Mark shop</button>
   </div>`;
   const body = sub==='ore' ? renderOreShop() : renderMarkShop();
   return switcher + body;
+}
+// Popout shell for the Shop (ui-overhaul) — Shop stopped being tab content
+// (state.tab==='shop') and joined the #modalRoot chain (see toggleShopOpen()).
+// Its own sub-tab switcher (Ore shop / Forge Mark shop) and row content
+// (renderOreShop()/renderMarkShop() below) are unchanged, just re-skinned
+// onto .wkShopRow/.wkBtn* instead of .shopRow/plain buttons.
+function renderShopModal(){
+  return `<div class="wkModalBackdrop" onclick="closeShopOpen()">
+    <div class="wkModalCard w1000" onclick="event.stopPropagation()">
+      <div class="wkModalHead">
+        <div>
+          <div class="wkModalTitle">Shop</div>
+          <div class="wkModalBlurb">Buy ore for the crafting table, or spend forge marks directly.</div>
+        </div>
+        <button type="button" class="wkBtn wkModalClose" onclick="closeShopOpen()">Close</button>
+      </div>
+      <div class="wkModalBody">${renderShop()}</div>
+    </div>
+  </div>`;
 }
 
 // RETIRED, unreachable from the UI — see MARK_PACKS' doc comment for the
@@ -4258,21 +4651,23 @@ function renderOreShop(){
   const rows = MATERIALS.map(m=>{
     const locked = state.level<m.reqLevel;
     const owned = state.ores[m.id]||0;
-    return `<div class="shopRow">
-      <div>
-        <b>${m.name} ore</b> <span class="oreTag">&mdash; owned: ${owned}</span>
-        <div class="small">${locked? 'Requires business level '+m.reqLevel : m.cost.toLocaleString()+' gold each'}</div>
+    return `<div class="wkShopRow">
+      <div style="display:flex;align-items:center;gap:14px;">
+        <img src="${INGOT_ICON[m.id]}" alt="${m.name}">
+        <div>
+          <b>${m.name} ore</b> <span class="oreTag">&mdash; owned: ${owned}</span>
+          <div class="small">${locked? 'Requires business level '+m.reqLevel : m.cost.toLocaleString()+' gold each'}</div>
+        </div>
       </div>
       <div class="row">
-        <button onclick="buyOre('${m.id}',1)" ${locked||state.gold<m.cost?'disabled':''}>Buy 1</button>
-        <button onclick="buyOre('${m.id}',5)" ${locked||state.gold<m.cost*5?'disabled':''}>Buy 5</button>
-        <button onclick="buyOre('${m.id}',10)" ${locked||state.gold<m.cost*10?'disabled':''}>Buy 10</button>
+        <button class="wkBtn" onclick="buyOre('${m.id}',1)" ${locked||state.gold<m.cost?'disabled':''}>Buy 1</button>
+        <button class="wkBtn" onclick="buyOre('${m.id}',5)" ${locked||state.gold<m.cost*5?'disabled':''}>Buy 5</button>
+        <button class="wkBtn" onclick="buyOre('${m.id}',10)" ${locked||state.gold<m.cost*10?'disabled':''}>Buy 10</button>
       </div>
     </div>`;
   }).join('');
-  return `<div class="panel">
-    <div class="section-title">Ore shop</div>
-    <div class="small" style="margin-bottom:10px;">Buy ore here, then place it on a crafting table's grid to forge a sword.</div>
+  return `<div style="display:flex;flex-direction:column;gap:10px;">
+    <div class="small">Buy ore here, then place it on a crafting table's grid to forge a sword.</div>
     ${rows}
   </div>`;
 }
@@ -4282,12 +4677,12 @@ function renderMarkShop(){
     if(st.unlocked) return '';
     const locked = state.level<TABLE2_CONFIG.reqLevel;
     const canBuy = !locked && state.marks>=TABLE2_MARK_COST;
-    return `<div class="shopRow">
+    return `<div class="wkShopRow marks">
       <div>
         <b>Table ${i+1}</b>
         <div class="small">${locked? 'Requires business level '+TABLE2_CONFIG.reqLevel : TABLE2_MARK_COST.toLocaleString()+' forge marks'}</div>
       </div>
-      <button onclick="buyStationMarks(${i})" ${canBuy?'':'disabled'}>Buy with forge marks</button>
+      <button class="wkBtnPri" onclick="buyStationMarks(${i})" ${canBuy?'':'disabled'}>Buy with forge marks</button>
     </div>`;
   }).join('');
   const upgradeRows = state.stations.map((st,i)=>{
@@ -4297,35 +4692,43 @@ function renderMarkShop(){
     const locked = state.level<reqLevel;
     const [nr, nc] = GRID_TIERS[st.tier+1];
     const canBuy = !locked && state.marks>=cost;
-    return `<div class="shopRow">
+    return `<div class="wkShopRow marks">
       <div>
         <b>Table ${i+1} grid</b>
         <div class="small">${locked? 'Requires business level '+reqLevel : 'Upgrade to '+nr+'&times;'+nc+' &mdash; '+cost.toLocaleString()+' forge marks'}</div>
       </div>
-      <button onclick="upgradeStationMarks(${i})" ${canBuy?'':'disabled'}>Buy with forge marks</button>
+      <button class="wkBtnPri" onclick="upgradeStationMarks(${i})" ${canBuy?'':'disabled'}>Buy with forge marks</button>
     </div>`;
   }).join('');
   const tableRows = unlockRows + upgradeRows;
   const hammerRows = HAMMERS.filter(h=>h.id!=='smith').map(h=>{
     const cost = HAMMER_MARK_COST[h.id];
     const canBuy = state.marks>=cost;
-    return `<div class="shopRow">
-      <div>
-        <b>${h.name}</b> <span class="oreTag">&mdash; owned: ${state.hammerInventory[h.id]||0}</span>
-        <div class="small">${h.desc}</div>
+    return `<div class="wkShopRow marks">
+      <div style="display:flex;align-items:center;gap:14px;">
+        <img src="${HAMMER_ICON[h.id]}" alt="${h.name}" style="width:34px;height:48px;object-fit:contain;">
+        <div>
+          <b>${h.name}</b> <span class="oreTag">&mdash; owned: ${state.hammerInventory[h.id]||0}</span>
+          <div class="small">${h.desc}</div>
+        </div>
       </div>
-      <button onclick="buyHammerMarks('${h.id}')" ${canBuy?'':'disabled'}>Buy 1 (${cost} forge marks)</button>
+      <button class="wkBtnPri" onclick="buyHammerMarks('${h.id}')" ${canBuy?'':'disabled'}>Buy 1 (${cost} forge marks)</button>
     </div>`;
   }).join('');
-  return `<div class="panel">
-    <div class="section-title">Forge Mark shop</div>
-    <div class="small" style="margin-bottom:10px;">Spend forge marks &mdash; the premium currency &mdash; to instantly unlock or upgrade crafting tables, or buy hammers, skipping gold and the wheel.</div>
+  return `<div style="display:flex;flex-direction:column;gap:10px;">
+    <div class="small">Spend forge marks &mdash; the premium currency &mdash; to instantly unlock or upgrade crafting tables, or buy hammers, skipping gold and the wheel.</div>
     ${tableRows? `<div class="small" style="margin-bottom:4px;"><b>Crafting tables</b></div>${tableRows}` : ''}
     <div class="small" style="margin:10px 0 4px;"><b>Hammers</b></div>
     ${hammerRows}
   </div>`;
 }
 
+// Retired from above the crafting grid (see renderTableWrap()) — ore
+// selection now lives in the bottom context tray's "Ore rack" tab
+// (renderTrayOreRack()), which builds its own .wkTrayItem cards straight
+// from MATERIALS/state.ores/selectPlaceOre() rather than calling this.
+// Left intact/unused rather than deleted in case anything still wants the
+// old compact .oreChip row.
 function renderOrePalette(stationIdx, st){
   const chips = MATERIALS.filter(m=>(state.ores[m.id]||0)>0).map(m=>
     `<button type="button" class="oreChip ${st.selectedOreId===m.id?'selected':''}" onclick="selectPlaceOre(${stationIdx},'${m.id}')" title="${m.name}">
@@ -4333,6 +4736,55 @@ function renderOrePalette(stationIdx, st){
     </button>`
   ).join('');
   return `<div class="oreChips">${chips || '<span class="small">No ore in stock &mdash; buy some in the Shop.</span>'}</div>`;
+}
+// The tray's "Ore rack" tab — same MATERIALS/state.ores/selectPlaceOre() data
+// and click flow as the old renderOrePalette() above, just re-skinned as big
+// .wkTrayItem cards per the design handoff instead of small .oreChip pills.
+// Always targets the currently-active workshop table (state.activeWorkshopTable)
+// since only one table's grid is visible/clickable at a time now.
+function renderTrayOreRack(){
+  const stationIdx = Math.min(state.activeWorkshopTable, state.stations.length-1);
+  const st = state.stations[stationIdx];
+  const items = MATERIALS.filter(m=>state.level>=m.reqLevel).map(m=>{
+    const owned = state.ores[m.id]||0;
+    const selected = st.selectedOreId===m.id;
+    return `<div class="wkTrayItem ${selected?'selected':''} ${owned<=0?'empty':''}" title="${m.name} ore" onclick="selectPlaceOre(${stationIdx},'${m.id}')">
+      <img src="${INGOT_ICON[m.id]}" alt="${m.name}">
+      <div class="name">${m.name}</div>
+      <div class="count">&times;${owned}</div>
+    </div>`;
+  }).join('');
+  return `<div class="wkTrayItems">${items}</div>`;
+}
+// The tray's "Hammers" tab — a read-only view of hammer counts, click shows
+// the description as a toast. Same data/behavior as the old
+// renderHammerInventoryPopout() (see below), re-skinned as .wkTrayItem cards.
+function renderTrayHammers(){
+  const items = HAMMERS.map(h=>{
+    const isSmith = h.id==='smith';
+    const owned = state.hammerInventory[h.id]||0;
+    const empty = !isSmith && owned<=0;
+    return `<div class="wkTrayItem ${empty?'empty':''}" title="${h.desc}" onclick="setToast('${h.name} — ${h.desc.replace(/'/g,"\\'")}')">
+      <img src="${HAMMER_ICON[h.id]}" alt="${h.name}">
+      <div class="name">${h.name}</div>
+      <div class="count">${isSmith? '&infin;' : '&times;'+owned}</div>
+    </div>`;
+  }).join('');
+  return `<div class="wkTrayItems">${items}</div>`;
+}
+// The tray's "Blades" tab — a peek at what's forged, same convention as the
+// old renderInventoryPanel() cap (INVENTORY_SIDEBAR_CAP): capped so the tray
+// never needs its own scrollbar, with "All N swords" (on the shelf panel)
+// as the place the full, uncapped list actually lives (renderInventoryModal).
+const TRAY_BLADES_CAP = 7;
+function renderTrayBlades(){
+  const shown = state.inventory.slice().reverse().slice(0, TRAY_BLADES_CAP);
+  const items = shown.map(s=>`<div class="wkTrayItem" title="${s.material} &middot; Rank ${s.rank} &middot; AP ${s.ap} / DP ${s.dp}${s.el?' &middot; '+s.el:''}" onclick="toggleOrdersOpen()">
+      <img src="${swordArt(s)}" alt="${s.name}">
+      <div class="name">${s.name}</div>
+      <div class="count">Rank ${s.rank}</div>
+    </div>`).join('');
+  return `<div class="wkTrayItems">${items || '<span class="small" style="color:rgba(253,246,236,.85);">Nothing forged yet.</span>'}</div>`;
 }
 
 function updateCookingProgressUI(){
@@ -4355,37 +4807,50 @@ function updateCookingProgressUI(){
 
 // Wedges arranged on a circle around a fixed pixel radius via CSS transform, not
 // percentage-of-container math — so they land correctly regardless of grid size.
-function renderHammerRadial(stationIdx, c, spanStyle){
-  const radius = 58;
-  const n = HAMMERS.length;
-  const wedges = HAMMERS.map((h, i)=>{
-    const angle = (i/n) * 2*Math.PI - Math.PI/2;
-    const x = Math.round(Math.cos(angle)*radius);
-    const y = Math.round(Math.sin(angle)*radius);
-    const isGlass = h.id==='glass';
-    // Smith is the one hammer that's never permanently "used up" for the
-    // player specifically — see SMITH_HAMMER_COOLDOWN_MS's own comment.
-    // cooldownRemainMs is 0 for every other hammer (and for smith once the
-    // cooldown's elapsed, or if the player's never hit it at all yet).
+// Replaces the old circular wedge menu with a modal grid of option cards
+// (5 choices — Glass excluded, see POST_COOK_HAMMERS — matching the design
+// handoff's hammer-picker popout) — same enable/disable/cooldown logic as
+// the wedge version it replaces (owned count, already-used-this-craft, smith
+// cooldown remaining), and the same hammerHit()/state.openHammerRadial
+// underneath (see toggleHammerRadial()); only the presentation changed.
+function renderHammerPickerModal(){
+  const open = state.openHammerRadial;
+  if(!open) return '';
+  const st = state.stations[open.stationIdx];
+  const c = st && st.craftings.find(x=>x.id===open.craftId);
+  if(!c){ state.openHammerRadial = null; return ''; }
+  const cards = POST_COOK_HAMMERS.map(h=>{
     const cooldownRemainMs = h.id==='smith' && c.lastPlayerSmithHitAt!=null
       ? Math.max(0, SMITH_HAMMER_COOLDOWN_MS-(Date.now()-c.lastPlayerSmithHitAt))
       : 0;
     const alreadyUsed = h.id==='smith' ? false : c.hammersUsed.includes(h.id);
     const owned = hammerCanUse(h.id);
-    const enabled = !isGlass && owned && !alreadyUsed && cooldownRemainMs<=0;
-    let title = h.name;
-    if(isGlass) title += ' — only usable while still cooking';
-    else if(cooldownRemainMs>0) title += ' — ready again in '+formatMs(cooldownRemainMs);
-    else if(alreadyUsed) title += ' — already used on this craft';
-    else if(!owned) title += ' — you don’t own this hammer';
-    const action = enabled ? `hammerHit(${stationIdx},'${c.id}','${h.id}')` : `setToast('${title.replace(/'/g,"\\'")}')`;
-    return `<button type="button" class="hammerWedge ${enabled?'':'disabled'}" title="${title}"
-      style="transform:translate(calc(-50% + ${x}px),calc(-50% + ${y}px));" onclick="${action}">
+    const enabled = owned && !alreadyUsed && cooldownRemainMs<=0;
+    let desc = h.desc;
+    if(cooldownRemainMs>0) desc = 'Ready again in '+formatMs(cooldownRemainMs)+'.';
+    else if(alreadyUsed) desc = 'Already used on this craft.';
+    else if(!owned) desc = "You don't own this hammer — buy one in the Shop.";
+    const countLabel = h.id==='smith' ? '&infin;' : '&times;'+(state.hammerInventory[h.id]||0);
+    const action = enabled ? `hammerHit(${open.stationIdx},'${c.id}','${h.id}')` : `setToast('${desc.replace(/'/g,"\\'")}')`;
+    return `<div class="wkHammerCard ${enabled?'':'disabled'}" title="${h.name}" onclick="${action}">
       <img src="${HAMMER_ICON[h.id]}" alt="${h.name}">
-    </button>`;
+      <div class="name">${h.name}</div>
+      <div class="count">${countLabel}</div>
+      <div class="desc">${desc}</div>
+    </div>`;
   }).join('');
-  return `<div class="radialBackdrop" onclick="closeHammerRadial()"></div>
-    <div class="hammerRadial" style="${spanStyle}">${wedges}</div>`;
+  return `<div class="wkModalBackdrop" onclick="closeHammerRadial()">
+    <div class="wkModalCard" style="width:760px;" onclick="event.stopPropagation()">
+      <div class="wkModalHead">
+        <div>
+          <div class="wkModalTitle">Choose a hammer</div>
+          <div class="wkModalBlurb">Each hammer (besides Smith) only works once per craft.</div>
+        </div>
+        <button type="button" class="wkBtn wkModalClose" onclick="closeHammerRadial()">Close</button>
+      </div>
+      <div class="wkHammerGrid">${cards}</div>
+    </div>
+  </div>`;
 }
 
 // A plain horizontal box list, not a radial — just a always-reachable
@@ -4483,10 +4948,15 @@ function renderStationGrid(stationIdx, st){
   }
 
   // A table can run several crafts side by side, so firing one pair never blocks
-  // another — every currently-available pair gets its own Fire button.
-  const fireButtons = gridPairs(st.grid).map(p=>
-    `<button type="button" class="fireBtn" style="grid-row:${p.r1+1} / ${p.r2+2};grid-column:${p.c1+1} / ${p.c2+2};" onclick="fireCells(${stationIdx},${p.r1},${p.c1},${p.r2},${p.c2})">Fire</button>`
-  ).join('');
+  // another — every currently-available pair gets its own Fire button. Two
+  // DIFFERENT materials fuse instead of firing straight (see fireCells()) —
+  // labeled/colored accordingly (see .fireBtn.fuse) so that reads before the
+  // button is even pressed, matching the design handoff's Fire/Fuse split.
+  const fireButtons = gridPairs(st.grid).map(p=>{
+    const matA = matById(st.grid[p.r1][p.c1]).name, matB = matById(st.grid[p.r2][p.c2]).name;
+    const fuse = st.grid[p.r1][p.c1] !== st.grid[p.r2][p.c2];
+    return `<button type="button" class="fireBtn ${fuse?'fuse':''}" style="grid-row:${p.r1+1} / ${p.r2+2};grid-column:${p.c1+1} / ${p.c2+2};" title="${fuse? 'Fuse '+matA+' + '+matB : 'Forge a '+matA+' sword'}" onclick="fireCells(${stationIdx},${p.r1},${p.c1},${p.r2},${p.c2})">${fuse?'Fuse':'Fire'}</button>`;
+  }).join('');
 
   const spanOf = c=>{
     const minR = Math.min(c.cells[0].r,c.cells[1].r), maxR = Math.max(c.cells[0].r,c.cells[1].r);
@@ -4525,7 +4995,6 @@ function renderStationGrid(stationIdx, st){
   const readyHtml = ready.map(c=>{
     const {style} = spanOf(c);
     const cellDivs = c.cells.map(p=>`<div class="gridCell ready-craft" style="grid-row:${p.r+1};grid-column:${p.c+1};"></div>`).join('');
-    const radialOpen = state.openHammerRadial && state.openHammerRadial.stationIdx===stationIdx && state.openHammerRadial.craftId===c.id;
     return `<div class="readyPair" style="display:contents;">
       ${cellDivs}
       <div class="readyActions" style="${style}">
@@ -4536,12 +5005,11 @@ function renderStationGrid(stationIdx, st){
           <button type="button" class="primary" onclick="collectSword(${stationIdx},'${c.id}')">Collect</button>
         </div>
       </div>
-      ${radialOpen? renderHammerRadial(stationIdx, c, style) : ''}
     </div>`;
   }).join('');
 
   const tableBg = CRAFT_TABLE_BG[st.tier];
-  return `<div class="craftGridWrap" style="grid-template-columns:repeat(${cols},1fr);grid-template-rows:repeat(${rows},1fr);background-image:url('${tableBg}');">
+  return `<div class="craftGridWrap" style="width:var(--wk-table-w);aspect-ratio:${cols}/${rows};grid-template-columns:repeat(${cols},1fr);grid-template-rows:repeat(${rows},1fr);background-image:url('${tableBg}');background-size:100% 100%;">
     ${cells.join('')}
     ${fireButtons}
     ${cookingHtml}
@@ -4549,70 +5017,61 @@ function renderStationGrid(stationIdx, st){
   </div>`;
 }
 
-function renderStation(st, i){
-  if(!st.unlocked){
-    const canUnlock = state.level>=TABLE2_CONFIG.reqLevel && state.gold>=TABLE2_CONFIG.cost;
-    const canUnlockMarks = state.level>=TABLE2_CONFIG.reqLevel && state.marks>=TABLE2_MARK_COST;
-    const reason = state.level<TABLE2_CONFIG.reqLevel ? 'Requires business level '+TABLE2_CONFIG.reqLevel : (TABLE2_CONFIG.cost.toLocaleString()+' gold or '+TABLE2_MARK_COST.toLocaleString()+' forge marks');
-    return `<div class="station locked">
-      <div class="title">Table ${i+1}</div>
-      <div class="small">${reason}</div>
-      <div class="row" style="gap:6px;">
-        <button ${canUnlock?'':'disabled'} onclick="unlockStation(${i})">Unlock${TABLE2_CONFIG.cost?' ('+TABLE2_CONFIG.cost.toLocaleString()+' gold)':''}</button>
-        <button ${canUnlockMarks?'':'disabled'} onclick="buyStationMarks(${i})">Unlock (${TABLE2_MARK_COST.toLocaleString()} forge marks)</button>
-      </div>
-    </div>`;
-  }
-  const [rows, cols] = GRID_TIERS[st.tier];
-  const upCost = upgradeGridCost(st.tier);
-  const upReqLevel = gridUpgradeReqLevel(i, st.tier);
-  const levelLocked = st.tier<MAX_TABLE_TIER && state.level<upReqLevel;
-  const canUpgrade = st.tier<MAX_TABLE_TIER && !levelLocked && state.gold>=upCost;
-  // Same mark-priced upgrade the Mark shop already offers, surfaced right on the
-  // table itself so a mark-rich player doesn't have to tab away to spend them —
-  // GRID_UPGRADE_MARK_COST has no entry past the last real upgrade (tier index
-  // MAX_TABLE_TIER-1), matching upgradeStationMarks()'s own tier<MAX_TABLE_TIER guard.
-  const markCost = GRID_UPGRADE_MARK_COST[st.tier];
-  const canUpgradeMarks = st.tier<MAX_TABLE_TIER && !levelLocked && markCost!==undefined && state.marks>=markCost;
-  const nextDims = st.tier<MAX_TABLE_TIER ? GRID_TIERS[st.tier+1] : null;
-  const cooking = st.craftings.filter(c=>!c.ready).length;
-  const ready = st.craftings.filter(c=>c.ready).length;
-  const statusNote = (cooking||ready) ? ` &middot; ${[cooking? cooking+' forging':'', ready? ready+' ready':''].filter(Boolean).join(', ')}` : '';
-  return `<div class="station">
-    <div class="title">Table ${i+1} &middot; ${rows}&times;${cols}${statusNote}</div>
-    <div class="small">This table can cook several pairs at once &mdash; fire another while one's still cooking.</div>
-    ${renderOrePalette(i, st)}
-    ${renderStationGrid(i, st)}
-    ${levelLocked? `<div class="small">Requires business level ${upReqLevel}</div>` : ''}
-    <div class="row" style="gap:6px;">
-      <button onclick="upgradeStation(${i})" ${st.tier>=MAX_TABLE_TIER?'disabled':(canUpgrade?'':'disabled')}>
-        ${st.tier>=MAX_TABLE_TIER? 'Max size' : 'Upgrade to '+nextDims[0]+'&times;'+nextDims[1]+' ('+upCost.toLocaleString()+'g)'}
-      </button>
-      ${st.tier<MAX_TABLE_TIER? `<button onclick="upgradeStationMarks(${i})" ${canUpgradeMarks?'':'disabled'}>${markCost.toLocaleString()} forge marks</button>` : ''}
+// ---- Always-on Workshop table wrap (ui-overhaul) ----
+// Replaces the old renderStation()/renderWorkshop() side-by-side ".grid3" of
+// both tables at once with the design handoff's single-table-visible-at-a-
+// time shell: a row of "Table 1"/"Table 2" tabs (state.activeWorkshopTable,
+// transient — see the state object), the active table's grid (or a locked
+// placeholder for an un-bought second table), and a status/upgrade footer.
+// Nothing about a table's own logic changes — cellClick/fireCells/
+// gridPairs/completeCraft/upgradeStation*/unlockStation are all untouched,
+// this only changes which table(s) are visible and how the grid/cells look.
+function setActiveWorkshopTable(i){ state.activeWorkshopTable = i; render(); }
+function renderTableLocked(idx){
+  const canUnlock = state.level>=TABLE2_CONFIG.reqLevel && state.gold>=TABLE2_CONFIG.cost;
+  const canUnlockMarks = state.level>=TABLE2_CONFIG.reqLevel && state.marks>=TABLE2_MARK_COST;
+  const reason = state.level<TABLE2_CONFIG.reqLevel
+    ? 'Needs business level '+TABLE2_CONFIG.reqLevel+'. Keep filling orders.'
+    : 'A whole second grid, cooking its own crafts alongside the first.';
+  return `<div class="wkTableLocked">
+    <h3>A second table</h3>
+    <div class="small" style="max-width:380px;">${reason}</div>
+    <div class="wkFooterRow">
+      <button type="button" class="wkBtnPri" ${canUnlock?'':'disabled'} onclick="unlockStation(${idx})">Unlock &mdash; ${TABLE2_CONFIG.cost.toLocaleString()}g</button>
+      <button type="button" class="wkBtn" ${canUnlockMarks?'':'disabled'} onclick="buyStationMarks(${idx})">Unlock &mdash; ${TABLE2_MARK_COST.toLocaleString()} marks</button>
     </div>
   </div>`;
 }
-
-function renderWorkshop(){
-  const stationsHtml = state.stations.map((st,i)=>renderStation(st,i)).join('');
-  // Hammer inventory is reachable from every page, but lives on the crafting
-  // grid panel itself now (used to be a full nav-rail button) since that's
-  // the one place its counts actually matter moment-to-moment. Reuses the
-  // same toggle/popout as before (toggleHammerInventory / renderHammerInventoryPopout,
-  // see renderNav()'s old comment) — just anchored via .gridHammerWrap instead
-  // of .hammerNavWrap.
-  const hammerBtn = `<div class="gridHammerWrap">
-    <button type="button" class="gridHammerBtn ${state.hammerInventoryOpen?'active':''}" onclick="toggleHammerInventory()" title="Hammer inventory">
-      <img src="${HAMMER_ICON.smith}" alt="Hammers">
-    </button>
-    ${state.hammerInventoryOpen ? renderHammerInventoryPopout() : ''}
+function renderTableFooter(idx, st){
+  if(!st.unlocked) return '';
+  const [rows, cols] = GRID_TIERS[st.tier];
+  const readyCount = st.craftings.filter(c=>c.ready).length;
+  const statusNote = readyCount ? ' &middot; '+readyCount+' ready' : '';
+  const tierMax = st.tier>=MAX_TABLE_TIER;
+  const upCost = upgradeGridCost(st.tier);
+  const upReqLevel = gridUpgradeReqLevel(idx, st.tier);
+  const levelLocked = !tierMax && state.level<upReqLevel;
+  const canUpgrade = !tierMax && !levelLocked && state.gold>=upCost;
+  const nextDims = tierMax ? null : GRID_TIERS[st.tier+1];
+  const markCost = GRID_UPGRADE_MARK_COST[st.tier];
+  const canUpgradeMarks = !tierMax && !levelLocked && markCost!==undefined && state.marks>=markCost;
+  return `<div class="wkFooterRow">
+    <span class="wkPillStatus">Table ${idx+1} &middot; ${rows}&times;${cols}${statusNote}</span>
+    <button type="button" class="wkBtnPri" ${tierMax||!canUpgrade?'disabled':''} onclick="upgradeStation(${idx})">${tierMax? 'Max size' : 'Upgrade to '+nextDims[0]+'&times;'+nextDims[1]+' &mdash; '+upCost.toLocaleString()+'g'}</button>
+    ${!tierMax? `<button type="button" class="wkBtn" ${canUpgradeMarks?'':'disabled'} onclick="upgradeStationMarks(${idx})">${markCost.toLocaleString()} marks</button>` : ''}
   </div>`;
-  return `
-  <div class="panel workshopPanel">
-    ${hammerBtn}
-    <div class="section-title">Crafting grid</div>
-    <div class="small" style="margin-bottom:10px;">Place ore on the grid, then fire two adjacent cells to forge a sword &mdash; same ore for a straight craft, two different ores to fuse something new. Hammer a finished craft (yours or a friend's) before collecting to raise its quality.</div>
-    <div class="grid3">${stationsHtml}</div>
+}
+function renderTableWrap(){
+  const idx = Math.min(state.activeWorkshopTable, state.stations.length-1);
+  const st = state.stations[idx];
+  const tabs = state.stations.map((s,i)=>
+    `<button type="button" class="wkTableTab ${i===idx?'active':''}" onclick="setActiveWorkshopTable(${i})">Table ${i+1}${s.unlocked?'':' &#128274;'}</button>`
+  ).join('');
+  const body = st.unlocked ? renderStationGrid(idx, st) : renderTableLocked(idx);
+  return `<div class="wkTableWrap">
+    <div class="wkTableTabs">${tabs}</div>
+    ${body}
+    ${renderTableFooter(idx, st)}
   </div>`;
 }
 
@@ -4627,17 +5086,17 @@ function renderOrderCard(o){
     : o.rewardGold.toLocaleString()+' gold';
   const rankLabel = o.isFusion ? 'any rank' : 'rank <span class="badge">'+o.minRank+'</span> or better';
   const nameRankClass = o.isFusion ? 'M' : o.minRank;
-  return `<div class="orderCard ${match?'fulfillable':''}">
+  return `<div class="wkOrderCard ${match?'fulfillable':''}">
       <div>
-        <b>${o.requester}</b> wants a <span class="rank${nameRankClass}">${o.materialName}</span> sword,
-        ${rankLabel}.
+        <b style="font-size:16px;">${o.requester}</b> <span style="font-size:15px;">wants a</span> <span class="rank${nameRankClass}" style="font-size:15px;font-weight:700;">${o.materialName}</span> <span style="font-size:15px;">sword,
+        ${rankLabel}.</span>
         ${o.guaranteed? ' <span class="badge" style="border-color:var(--green-border);color:var(--green);">from your inventory</span>' : ''}
-        <div class="small">Reward: ${rewardLabel} &middot; +${o.rewardRep} reputation
+        <div class="small" style="margin-top:4px;">Reward: ${rewardLabel} &middot; +${o.rewardRep} reputation
         ${match? ' &middot; can fulfill with '+match.name+' (Rank '+match.rank+')' : ' &middot; no matching sword in stock'}</div>
       </div>
-      <div class="row">
-        <button class="primary" onclick="fulfillOrder('${o.id}')" ${match?'':'disabled'}>Fulfill</button>
-        <button onclick="skipOrder('${o.id}')" ${state.gold<skipOrderCost(o)?'disabled':''}>Skip (${skipOrderCost(o).toLocaleString()}g)</button>
+      <div class="row" style="gap:10px;">
+        <button class="${match?'wkBtnPri':'wkBtn'}" onclick="fulfillOrder('${o.id}')" ${match?'':'disabled'}>Fulfill</button>
+        <button class="wkBtn" onclick="skipOrder('${o.id}')" ${state.gold<skipOrderCost(o)?'disabled':''}>Skip (${skipOrderCost(o).toLocaleString()}g)</button>
       </div>
     </div>`;
 }
@@ -4647,11 +5106,27 @@ function renderOrders(){
   // The guaranteed 5th slot always renders last, outside the reward sort — it's a
   // fixed safety net, not part of the rotating pool.
   const guaranteedCard = state.guaranteedOrder ? renderOrderCard(state.guaranteedOrder) : '';
-  return `<div class="panel">
-    <div class="section-title">Adventurer orders</div>
-    <div class="small" style="margin-bottom:10px;">Fulfilling orders pays gold and builds your reputation, which unlocks new ore, stations and hammers.</div>
+  return `<div style="display:flex;flex-direction:column;gap:10px;">
+    ${cards || guaranteedCard ? '' : '<div class="small" style="padding:20px 0;">Every adventurer has been served. New requests come in as your reputation grows.</div>'}
     ${cards}
     ${guaranteedCard}
+  </div>`;
+}
+// Popout shell for Orders (ui-overhaul) — same mutual-exclusion convention
+// as every other new toggle here (see toggleOrdersOpen()); ensureGuaranteedOrder()
+// used to run from setTab('orders'), now runs from toggleOrdersOpen() instead.
+function renderOrdersModal(){
+  return `<div class="wkModalBackdrop" onclick="closeOrdersOpen()">
+    <div class="wkModalCard" style="width:860px;" onclick="event.stopPropagation()">
+      <div class="wkModalHead">
+        <div>
+          <div class="wkModalTitle">Adventurer orders</div>
+          <div class="wkModalBlurb">Fulfilling orders pays gold and builds your reputation.</div>
+        </div>
+        <button type="button" class="wkBtn wkModalClose" onclick="closeOrdersOpen()">Close</button>
+      </div>
+      <div class="wkModalBody">${renderOrders()}</div>
+    </div>
   </div>`;
 }
 
@@ -5009,9 +5484,10 @@ function renderFriendStationGrid(friend, st, sentHits){
   }
 
   // Fixed values matching .craftGridWrap's own inline style below (cellPx)
-  // and its stylesheet rule (gap:8px, padding:10px) — see cellPx's own
-  // comment for why this grid uses fixed px sizing at all.
-  const cellPx = 140, cellGap = 8, cellPad = 10;
+  // and its stylesheet rule (gap:var(--wk-cell-gap)=14px, padding:
+  // var(--wk-table-pad)=26px, updated for the ui-overhaul table restyle —
+  // see cellPx's own comment for why this grid uses fixed px sizing at all).
+  const cellPx = 140, cellGap = 14, cellPad = 26;
   // Pixel math instead of grid-row/grid-column + position:absolute — a
   // readyActions/cookProgress overlay needs to both SPAN multiple grid
   // cells AND sit on top of them (z-index), which the real in-tab
@@ -5136,10 +5612,10 @@ function renderFriends(){
       const msLeft = Math.max(0, state.jeanClaudeNextVisitAt-Date.now());
       const minsLeft = Math.ceil(msLeft/60000);
       const nextVisitLabel = minsLeft<=0 ? 'any time now' : minsLeft<60 ? 'in ~'+minsLeft+'m' : 'in ~'+Math.round(minsLeft/60*10)/10+'h';
-      return `<div class="friendCard">
-        <div class="friendInfo">
-          <div class="avatar">${initials(f.name)}</div>
-          <div>
+      return `<div class="wkFriendCard">
+        <div class="wkFriendTop">
+          <div class="wkFriendAvatar">${initials(f.name)}</div>
+          <div style="flex:1;min-width:0;">
             <b>${f.name}</b> <span class="badge" style="border-color:var(--gold);color:var(--gold);">permanent helper</span>
             <div class="small" style="margin-top:4px;">Drops by every 20&ndash;30m and hammers 1&ndash;3 of your ready swords for you, no invite needed.</div>
             <div class="small">Next visit ${nextVisitLabel}</div>
@@ -5163,27 +5639,45 @@ function renderFriends(){
       ? (readyCount ? readyCount+' station'+(readyCount>1?'s':'')+' ready for a hammer hit' : 'Nothing ready right now')
       : "Visit to see what's on their workbench.";
     const friendTitle = titleFor(f.titleId);
-    return `<div class="friendCard">
-      <div class="friendInfo">
+    return `<div class="wkFriendCard">
+      <div class="wkFriendTop">
         ${renderAvatar(f.avatarId, label)}
-        <div>
+        <div style="flex:1;min-width:0;">
           <b>${label}</b>${friendTitle? ` <span class="small" style="color:var(--gold);">&middot; ${friendTitle}</span>` : ''}
-          ${mini ? `<div class="miniStations" style="margin-top:4px;">${mini}</div>` : ''}
+          ${mini ? `<div class="miniStations wkFriendDots" style="margin-top:4px;">${mini}</div>` : ''}
           <div class="small" style="margin-top:4px;">${statusLine}</div>
         </div>
-      </div>
-      <div class="row" style="gap:6px;">
-        <button class="primary" onclick="visitFriend('${f.id}')">Visit</button>
-        <button onclick="removeFriend('${f.id}')">Remove</button>
+        <button class="wkBtnPri" onclick="visitFriend('${f.id}')">Visit</button>
+        <button class="wkBtn" onclick="removeFriend('${f.id}')">Remove</button>
       </div>
     </div>`;
   }).join('');
-  return `<div class="panel">
-    <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:4px;">
-      <div class="section-title" style="margin:0;">Your friends (${state.friends.length})</div>
-      <button type="button" onclick="toggleProfile()">Your Profile</button>
+  return `<div style="display:flex;flex-direction:column;gap:12px;">
+    <div class="row" style="justify-content:flex-end;">
+      <button type="button" class="wkBtn" onclick="toggleProfile()">Your Profile</button>
     </div>
+    ${renderFriendRequestsAndAdd()}
     ${friendRows}
+  </div>`;
+}
+// Popout shell for Friends (ui-overhaul) — same content as before
+// (renderFriends()) plus the friend-requests/add-by-code section that used
+// to live in the separate renderFriendSidebar() (now folded in above via
+// renderFriendRequestsAndAdd()). The "Your Profile" button stays exactly
+// where it already was (inside this same panel) — the profile picker's
+// trigger location is explicitly out of scope for this pass.
+function renderFriendsModal(){
+  return `<div class="wkModalBackdrop" onclick="closeFriendsOpen()">
+    <div class="wkModalCard w1000" onclick="event.stopPropagation()">
+      <div class="wkModalHead">
+        <div>
+          <div class="wkModalTitle">Friends (${state.friends.length})</div>
+          <div class="wkModalBlurb">Visit a friend's workshop to help hammer their ready crafts.</div>
+        </div>
+        <button type="button" class="wkBtn wkModalClose" onclick="closeFriendsOpen()">Close</button>
+      </div>
+      <div class="wkModalBody">${renderFriends()}</div>
+    </div>
   </div>`;
 }
 
@@ -5628,41 +6122,198 @@ const TAB_META = {
   friends: 'Friends',
 };
 
-function renderNav(){
-  const items = [
-    {id:'workshop', kind:'tab'},
-    {id:'shop', kind:'tab'},
-    {id:'orders', kind:'tab'},
-    {id:'mines', kind:'modal', fn:'toggleMineOverview', flag:'mineOpen'},
-    {id:'catalog', kind:'modal', fn:'toggleCatalogOverview', flag:'catalogOpen'},
-    {id:'friends', kind:'tab'},
-    // Always shown now (was hidden below level 8) — toggleExpeditionsOverview()
-    // itself is what actually gates access, toasting "not unlocked yet"
-    // instead of opening the modal when clicked too early.
-    {id:'expeditions', kind:'modal', fn:'toggleExpeditionsOverview', flag:'expeditionsOpen'},
-  ];
-  // Only 'friends' has anything to badge right now — a count of pending
-  // INCOMING requests (see checkIncomingFriendRequests()), not outgoing
-  // ones, since those need no action from this player.
-  const navBadges = { friends: (state.incomingFriendRequests||[]).length };
-  const buttons = items.map(it=>{
-    const active = it.kind==='tab' ? state.tab===it.id : state[it.flag];
-    const action = it.kind==='tab' ? `setTab('${it.id}')` : `${it.fn}()`;
-    const badgeCount = navBadges[it.id]||0;
-    const badgeHtml = badgeCount>0
-      ? `<span class="badge" style="position:absolute;top:-6px;right:-6px;background:#a33;color:#fdf6ec;border-color:#a33;">${badgeCount}</span>`
-      : '';
-    if(NAV_BG_IMAGES[it.id]){
-      return `<div class="navItem navIconArt ${active?'active':''}" style="background-image:url('${NAV_BG_IMAGES[it.id]}');position:relative;" title="${NAV_LABELS[it.id]}" onclick="${action}">${badgeHtml}</div>`;
-    }
-    const icon = NAV_ICONS[it.id]
-      ? `<img src="${NAV_ICONS[it.id]}" alt="${NAV_LABELS[it.id]}">`
-      : `<span class="navIconGlyph" title="${NAV_LABELS[it.id]}">🧭</span>`;
-    return `<div class="navItem ${active?'active':''}" style="position:relative;" onclick="${action}">${icon}${badgeHtml}</div>`;
+// ---- Hanging nav signs (ui-overhaul) ----
+// Replaces the old vertical nav-rail (renderNav(), tab buttons + Mines/
+// Catalog/Expeditions modal buttons) with six rotated hanging signs — Shop/
+// Orders/Friends/Mines/Catalog/Expeditions now ALL open as popouts (Shop/
+// Orders/Friends newly so; Mines/Catalog/Expeditions already did) since the
+// Workshop screen itself is always on and has no more tab content to swap
+// away from. Same NAV_ICONS/NAV_BG_IMAGES assets as before.
+const SIGNS = [
+  {id:'shop', label:'Shop', fn:'toggleShopOpen'},
+  {id:'orders', label:'Orders', fn:'toggleOrdersOpen'},
+  {id:'mines', label:'Mines', fn:'toggleMineOverview'},
+  {id:'catalog', label:'Catalog', fn:'toggleCatalogOverview'},
+  {id:'friends', label:'Friends', fn:'toggleFriendsOpen'},
+  {id:'expeditions', label:'Expeditions', fn:'toggleExpeditionsOverview'},
+];
+// Orders: count of orders (regular pool + the guaranteed slot) that could be
+// fulfilled right now (bestSwordForOrder() truthy) — same "can act on this"
+// signal renderOrderCard() already highlights per-card.
+// Mines: count of unlocked mines currently holding collectible stock
+// (minePendingTotal() > 0) — the real mine data's `pending` object-of-
+// materials, not a flat `stock` number like the design handoff's mock mines.
+// Friends: deliberately no badge — see the final report's "known gap" note;
+// the real friends system doesn't keep every friend's live craft state
+// prefetched locally the way "friends' ready crafts" would need, and this
+// pass doesn't add new backend calls to fill that in.
+function signBadge(id){
+  if(id==='orders'){
+    const all = state.guaranteedOrder ? state.orders.concat([state.guaranteedOrder]) : state.orders;
+    const n = all.filter(o=>bestSwordForOrder(o)).length;
+    return n>0 ? n : null;
+  }
+  if(id==='mines'){
+    const n = state.mines.filter(m=>state.level>=m.reqLevel && minePendingTotal(m)>0).length;
+    return n>0 ? n : null;
+  }
+  return null;
+}
+function renderSignCol(){
+  const items = SIGNS.map((s,i)=>{
+    const badge = signBadge(s.id);
+    const rot = i%2 ? 1.4 : -1.4;
+    const bgImg = NAV_BG_IMAGES[s.id];
+    const icon = NAV_ICONS[s.id];
+    const imgHtml = bgImg
+      ? `<div class="wkSignImg" style="background-image:url('${bgImg}');background-size:cover;background-position:center;"></div>`
+      : icon
+        ? `<img class="wkSignImg" src="${icon}" alt="${s.label}">`
+        : `<div class="wkSignImg glyph">🧭</div>`;
+    return `<div class="wkSign" title="${s.label}" style="transform:rotate(${rot}deg);" onclick="${s.fn}()">
+      <div class="wkSignHandle"></div>
+      <div class="wkSignImgWrap">
+        ${imgHtml}
+        ${badge? `<span class="wkSignBadge">${badge}</span>` : ''}
+      </div>
+    </div>`;
   }).join('');
-  // The hammer-inventory button used to live here (nav rail) but has moved
-  // onto the crafting grid panel itself — see renderWorkshop()'s hammerBtn.
-  return `<div class="navRow">${buttons}</div>`;
+  return `<div class="wkSignCol">${items}</div>`;
+}
+
+// ---- Resource HUD / title plaque / utility icon row (ui-overhaul, new markup) ----
+function renderWorkshopHud(){
+  const pct = Math.min(100, Math.round(state.exp/expToNext(state.level)*100));
+  const ready = wheelReady();
+  const remain = Math.ceil(wheelRemainingMs()/1000);
+  return `<div class="wkHud">
+    <div class="wkHudRow">
+      <div class="wkPill"><img src="${GOLD_ICON}" alt="Gold"><span class="wkPillNum gold">${state.gold.toLocaleString()}</span></div>
+      <div class="wkPill"><span class="wkPillGem">&#128142;</span><span class="wkPillNum mark">${state.marks.toLocaleString()}</span></div>
+      <button type="button" class="wkWheelBtn ${ready?'':'cooling'}" onclick="openWheel()">${ready? '&#127920; Spin' : '&#127920; '+remain+'s'}</button>
+    </div>
+    <div class="wkRepBar">
+      <span class="wkRepLabel">Lv ${state.level}</span>
+      <div class="wkRepTrack">
+        <div class="wkRepFill" style="width:${pct}%;"></div>
+        <div class="wkRepNum">${state.exp} / ${expToNext(state.level)}</div>
+      </div>
+    </div>
+  </div>`;
+}
+function renderTitlePlaque(){
+  const kicker = state.username ? state.username : '';
+  return `<div class="wkTitlePlaque">
+    <div class="wkTitleText">Workshop</div>
+    ${kicker? `<div class="wkKicker">${kicker}</div>` : ''}
+  </div>`;
+}
+function renderIconRow(){
+  return `<div class="wkIconRow">
+    <img class="wkIconBtn" src="${ACHIEVEMENTS_ICON}" alt="Achievements" title="Achievements" onclick="toggleAchievements()">
+    <img class="wkIconBtn" src="${HELP_ICON}" alt="How to play" title="How to play" onclick="openTutorial()">
+    <img class="wkIconBtn ${state.muted?'muted':''}" src="${VOLUME_ICON}" alt="Volume" title="${state.muted?'Unmute':'Mute'}" onclick="toggleMuted()">
+    <img class="wkIconBtn" src="${SETTINGS_ICON}" alt="Settings" title="Settings" onclick="toggleSettings()">
+  </div>`;
+}
+
+// ---- Display case (ui-overhaul, brand new) ----
+function renderDisplayCase(){
+  const s = state.display;
+  const name = s ? s.name : 'Empty case';
+  const meta = s ? (s.material+' &middot; Rank '+s.rank+' &middot; +'+repBonusPct(s)+'% reputation') : 'Mount your fanciest blade';
+  const body = s
+    ? `<div class="wkCaseArtWrap"><img src="${swordArt(s)}" alt="${s.name}"></div>`
+    : `<div class="wkCaseEmpty"><span>+</span></div>`;
+  return `<div class="wkDisplayCase" title="Your display case" onclick="toggleDisplayOverview()">
+    <div class="wkCaseHook"></div>
+    <div class="wkCaseBody">
+      <div class="wkCaseKicker">On display</div>
+      ${body}
+      <div class="wkCaseName rank${s?s.rank:''}">${name}</div>
+      <div class="wkCaseMeta">${meta}</div>
+    </div>
+  </div>`;
+}
+function renderDisplayModal(){
+  const candidates = state.inventory.slice().sort((a,b)=>repBonusPct(b)-repBonusPct(a));
+  const rows = candidates.map(s=>`<div class="wkDisplayRow" onclick="mountDisplay('${s.id}')">
+      <img src="${swordArt(s)}" alt="${s.name}">
+      <div style="min-width:0;flex:1;">
+        <div class="rank${s.rank}" style="font:600 15px/1.2 Figtree,sans-serif;">${s.name}</div>
+        <div class="small">${s.material} &middot; Rank ${s.rank} &middot; AP ${s.ap} / DP ${s.dp}${s.el?' &middot; '+s.el:''}</div>
+      </div>
+      <span class="wkDisplayBonus">+${repBonusPct(s)}% reputation</span>
+    </div>`).join('');
+  return `<div class="wkModalBackdrop" onclick="closeDisplayOverview()">
+    <div class="wkModalCard w1000" onclick="event.stopPropagation()">
+      <div class="wkModalHead">
+        <div>
+          <div class="wkModalTitle">Display case</div>
+          <div class="wkModalBlurb">A mounted blade boosts the reputation every order pays out.</div>
+        </div>
+        <button type="button" class="wkBtn wkModalClose" onclick="closeDisplayOverview()">Close</button>
+      </div>
+      <div class="wkModalBody">
+        ${candidates.length? rows : '<div class="small" style="padding:16px 0;">Nothing on the shelf to show off yet &mdash; forge something first.</div>'}
+        ${state.display? `<button type="button" class="wkBtn" style="align-self:flex-start;margin-top:6px;" onclick="unmountDisplay()">Take ${state.display.name} down</button>` : ''}
+      </div>
+    </div>
+  </div>`;
+}
+
+// ---- Shelf panel (ui-overhaul) — restyled renderInventoryPanel() ----
+// Capped so this panel can never grow the page or need a scrollbar — same
+// reasoning/cap convention as the old sidebar version. Anything past the cap
+// is still reachable via "All N swords" → the Blades modal (renderInventoryModal
+// below), same as before.
+const SHELF_ROWS_CAP = 4;
+function renderShelfPanel(){
+  const all = state.inventory.slice().reverse();
+  const shown = all.slice(0, SHELF_ROWS_CAP);
+  const rows = shown.map(s=>`<div class="wkShelfRow">
+      <img src="${swordArt(s)}" alt="${s.name}">
+      <div style="min-width:0;">
+        <div class="wkShelfName rank${s.rank}">${s.name}</div>
+        <div class="wkShelfMeta">${s.material} &middot; Rank ${s.rank}</div>
+      </div>
+    </div>`).join('');
+  return `<div class="wkShelf">
+    <div class="wkShelfTitle">On the shelf</div>
+    <div class="wkShelfRows">
+      ${state.inventory.length? rows : '<div class="small">Nothing on the shelf yet &mdash; put ore on the table and fire two cells.</div>'}
+    </div>
+    <button type="button" class="wkBtn wkShelfAllBtn" onclick="toggleInventoryModal()">All ${state.inventory.length} swords</button>
+  </div>`;
+}
+
+// ---- Context tray (ui-overhaul, brand new) — Ore rack / Hammers / Blades ----
+function setWorkshopTray(id){ state.tray = id; render(); }
+function renderTray(){
+  const tabs = [
+    {id:'ore', label:'Ore rack'},
+    {id:'hammers', label:'Hammers'},
+    {id:'blades', label:'Blades'},
+  ].map(t=>`<button type="button" class="wkTrayTab ${state.tray===t.id?'active':''}" onclick="setWorkshopTray('${t.id}')">${t.label}</button>`).join('');
+  let title, hint, body;
+  if(state.tray==='hammers'){
+    title = 'Hammer bench'; hint = 'Click one to see what it does.'; body = renderTrayHammers();
+  } else if(state.tray==='blades'){
+    title = 'Blades on the shelf'; hint = state.inventory.length+' forged &mdash; opens Orders.'; body = renderTrayBlades();
+  } else {
+    title = 'Ore rack'; hint = 'Click a bar, then click a cell on the table.'; body = renderTrayOreRack();
+  }
+  return `<div class="wkTray">
+    <div class="wkTrayTabCol">${tabs}</div>
+    <div class="wkTrayBody">
+      <div class="wkTrayHeader"><span class="wkTrayTitle">${title}</span><span class="wkTrayHint">${hint}</span></div>
+      ${body}
+    </div>
+  </div>`;
+}
+
+function renderToast(){
+  return state.toast ? `<div class="wkToast">${state.toast}</div>` : '';
 }
 
 function renderSwordRow(s){
@@ -5679,90 +6330,46 @@ function renderSwordRow(s){
       ` : `<button onclick="requestScrapSword('${s.id}')">Scrap</button>`}
     </div>`;
 }
-// Capped so this sidebar panel can never grow the page or need a scrollbar —
-// the whole app is meant to fit in one static window size. Anything past the
-// cap is still there, just reachable through "View all" (renderInventoryModal)
-// instead of piling up in-line.
-const INVENTORY_SIDEBAR_CAP = 4;
-function renderInventoryPanel(){
-  const all = state.inventory.slice().reverse();
-  const shown = all.slice(0, INVENTORY_SIDEBAR_CAP);
-  const overflow = all.length - shown.length;
-  const rows = shown.map(renderSwordRow).join('');
-  return `<div class="panel">
-    <div class="section-title">Inventory (${state.inventory.length})</div>
-    ${state.inventory.length? rows : '<div class="small">Nothing on the shelf yet &mdash; buy ore and start a station.</div>'}
-    ${overflow>0? `<button style="width:100%;margin-top:4px;" onclick="toggleInventoryModal()">View all (${overflow} more)</button>` : ''}
-  </div>`;
-}
-
-// Where the sidebar's overflow goes — .modalCard already caps itself at
-// 85vh with its own overflow-y:auto, so an arbitrarily large collection
-// scrolls *inside this overlay* without the underlying page ever growing.
+// The Blades modal — opened from the shelf panel's "All N swords" button
+// (see renderShelfPanel() above), restyled onto the shared .wkModalCard shell
+// but otherwise the same renderSwordRow() list (with its own scrap/confirm
+// flow) the old sidebar-overflow version used.
 function renderInventoryModal(){
   const rows = state.inventory.slice().reverse().map(renderSwordRow).join('');
-  return `<div class="modalBackdrop" onclick="toggleInventoryModal()">
-    <div class="modalCard" onclick="event.stopPropagation()">
-      <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:14px;">
-        <h3 class="section-title" style="margin:0;">Inventory (${state.inventory.length})</h3>
-        <button onclick="toggleInventoryModal()">Close</button>
+  return `<div class="wkModalBackdrop" onclick="toggleInventoryModal()">
+    <div class="wkModalCard" style="width:1120px;" onclick="event.stopPropagation()">
+      <div class="wkModalHead">
+        <div class="wkModalTitle">Blades (${state.inventory.length})</div>
+        <button type="button" class="wkBtn wkModalClose" onclick="toggleInventoryModal()">Close</button>
       </div>
-      ${state.inventory.length? rows : '<div class="small">Nothing on the shelf yet &mdash; buy ore and start a station.</div>'}
+      <div class="wkModalBody" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;align-content:start;">
+        ${state.inventory.length? rows : '<div class="small">Nothing on the shelf yet &mdash; buy ore and start a station.</div>'}
+      </div>
     </div>
   </div>`;
 }
 
-function renderShopSidebar(){
-  const unlocked = unlockedMaterials();
-  const oreRows = unlocked.map(m=>`<div class="row" style="justify-content:space-between;"><span class="small">${m.name}</span><span class="small">&times;${state.ores[m.id]||0}</span></div>`).join('');
-  const nextLocked = MATERIALS.filter(m=>m.reqLevel>state.level).sort((a,b)=>a.reqLevel-b.reqLevel)[0];
-  return `<div class="panel">
-    <div class="section-title">Your ore</div>
-    ${oreRows || '<div class="small">No ore yet &mdash; buy some to the left.</div>'}
-  </div>
-  <div class="panel" style="margin-top:14px;">
-    <div class="section-title">Wallet</div>
-    <div class="row" style="justify-content:space-between;"><span class="small">Gold</span><b>${state.gold.toLocaleString()}</b></div>
-    <div class="row" style="justify-content:space-between;margin-top:4px;"><span class="small">Forge Marks</span><b>${state.marks.toLocaleString()}</b></div>
-  </div>
-  ${nextLocked? `<div class="panel" style="margin-top:14px;">
-    <div class="section-title">Next unlock</div>
-    <div class="small">${nextLocked.name} ore at business level ${nextLocked.reqLevel}</div>
-  </div>` : ''}`;
-}
-
-function renderFriendSidebar(){
+// Friend requests (accept/decline) + add-by-code — used to be the Friends
+// tab's separate sidebar (renderFriendSidebar()); folded straight into the
+// Friends modal itself now that there's no more tab sidebar to hold it (see
+// renderFriendsModal()) rather than dropped.
+function renderFriendRequestsAndAdd(){
   const requests = state.incomingFriendRequests||[];
-  const requestsPanel = requests.length ? `<div class="panel" style="margin-bottom:14px;">
-    <div class="section-title">Friend requests (${requests.length})</div>
+  const requestsPanel = requests.length ? `<div class="wkFriendCard" style="margin-bottom:4px;">
+    <div class="wkModalTitle" style="font-size:20px;">Friend requests (${requests.length})</div>
     ${requests.map(r=>`
-      <div class="friendCard">
-        <div class="friendInfo">
-          <div class="avatar">${initials(r.fromDisplayName)}</div>
-          <div><b>${r.fromDisplayName}</b><div class="small">Wants to be your friend</div></div>
-        </div>
-        <div class="row" style="gap:6px;">
-          <button class="primary" onclick="acceptFriendRequest('${r.fromPlayerId}')">Accept</button>
-          <button onclick="declineFriendRequest('${r.fromPlayerId}')">Decline</button>
-        </div>
+      <div class="wkFriendTop">
+        <div class="wkFriendAvatar">${initials(r.fromDisplayName)}</div>
+        <div style="flex:1;min-width:0;"><b>${r.fromDisplayName}</b><div class="small">Wants to be your friend</div></div>
+        <button type="button" class="wkBtnPri" onclick="acceptFriendRequest('${r.fromPlayerId}')">Accept</button>
+        <button type="button" class="wkBtn" onclick="declineFriendRequest('${r.fromPlayerId}')">Decline</button>
       </div>`).join('')}
   </div>` : '';
-  return `${requestsPanel}<div class="panel">
-    <div class="section-title">Add a friend</div>
-    <div class="small" style="margin-bottom:8px;">Enter a friend's code to send them a request &mdash; find your own in Settings. They'll need to accept before you can see their workshop.</div>
-    <div class="row">
-      <input id="friendCodeInput" type="text" placeholder="FQ-XXXXXX" style="flex:1;min-width:120px;background:rgba(32,30,29,.04);color:var(--text);border:1.5px solid var(--border);border-radius:999px;padding:8px 14px;font-size:12px;text-transform:uppercase;">
-      <button class="primary" onclick="addFriendByCode()">Add</button>
-    </div>
+  return `${requestsPanel}<div class="wkFriendCard" style="flex-direction:row;align-items:center;gap:12px;">
+    <div style="flex:1;font-size:14px;color:var(--muted);">Enter a friend's code to send them a request &mdash; find your own in Settings. They'll need to accept before you can see their workshop.</div>
+    <input id="friendCodeInput" type="text" placeholder="FQ-XXXXXX" style="min-width:140px;background:rgba(32,30,29,.04);color:var(--text);border:1.5px solid var(--border);border-radius:999px;padding:10px 14px;font-size:13px;text-transform:uppercase;">
+    <button type="button" class="wkBtnPri" onclick="addFriendByCode()">Add by code</button>
   </div>`;
-}
-
-function renderSidebar(){
-  if(state.tab==='workshop') return renderInventoryPanel();
-  if(state.tab==='orders') return renderInventoryPanel() + `<div class="panel" style="margin-top:14px;"><button class="primary" style="width:100%" onclick="setTab('workshop')">Go to Workshop</button></div>`;
-  if(state.tab==='shop') return renderShopSidebar();
-  if(state.tab==='friends') return renderFriendSidebar();
-  return '';
 }
 
 // Any full re-render replaces the whole subtree, which would otherwise drop focus
@@ -5791,35 +6398,29 @@ function render(){
   const debugPanel = document.getElementById('debugPanel');
   if(debugPanel) debugPanel.innerHTML = renderDebug();
   const modalRoot = document.getElementById('modalRoot');
-  if(modalRoot) modalRoot.innerHTML = state.usernamePromptOpen ? renderUsernamePromptModal() : (state.friendHitPopup ? renderFriendHitPopup() : (state.newSwordPopup ? renderNewSwordPopup() : (state.expeditionResultQueue.length ? renderExpeditionResultPopup() : (state.dailyRewardPopup ? renderDailyRewardPopup() : (state.tutorialOpen ? renderTutorialModal() : (state.mineOpen ? renderMineOverview() : (state.catalogOpen ? renderCatalogOverview() : (state.settingsOpen ? renderSettingsModal() : (state.swordInventoryModalOpen ? renderInventoryModal() : (state.achievementsOpen ? renderAchievementsModal() : (state.profileOpen ? renderProfileModal() : (state.wheelOpen ? renderWheelModal() : (state.expeditionsOpen ? renderExpeditionOverview() : (state.visitingFriendId ? renderFriendVisitModal() : ''))))))))))))));
+  if(modalRoot) modalRoot.innerHTML = state.usernamePromptOpen ? renderUsernamePromptModal() : (state.friendHitPopup ? renderFriendHitPopup() : (state.newSwordPopup ? renderNewSwordPopup() : (state.expeditionResultQueue.length ? renderExpeditionResultPopup() : (state.dailyRewardPopup ? renderDailyRewardPopup() : (state.tutorialOpen ? renderTutorialModal() : (state.openHammerRadial ? renderHammerPickerModal() : (state.displayOpen ? renderDisplayModal() : (state.shopOpen ? renderShopModal() : (state.ordersOpen ? renderOrdersModal() : (state.friendsOpen ? renderFriendsModal() : (state.mineOpen ? renderMineOverview() : (state.catalogOpen ? renderCatalogOverview() : (state.settingsOpen ? renderSettingsModal() : (state.swordInventoryModalOpen ? renderInventoryModal() : (state.achievementsOpen ? renderAchievementsModal() : (state.profileOpen ? renderProfileModal() : (state.wheelOpen ? renderWheelModal() : (state.expeditionsOpen ? renderExpeditionOverview() : (state.visitingFriendId ? renderFriendVisitModal() : '')))))))))))))))))));
   // Must run AFTER the innerHTML assignment above (needs the real DOM node
   // to measure) — see fitFriendVisitContent()'s own comment for why this
   // scales instead of scrolling.
   if(state.visitingFriendId) fitFriendVisitContent();
   const app = document.getElementById('app');
-  const meta = TAB_META[state.tab] || TAB_META.workshop;
-  const mainContent = state.tab==='shop' ? renderShop() : state.tab==='workshop' ? renderWorkshop() : state.tab==='orders' ? renderOrders() : renderFriends();
+  // Always-on Workshop root (ui-overhaul) — replaces the old tabbed
+  // .pageHeading + .gameGrid (nav rail / main column / sidebar) shell. Shop/
+  // Orders/Friends/Mines/Catalog/Expeditions/etc. all draw over this via
+  // #modalRoot above; state.tab stays permanently 'workshop' now (nothing
+  // still branches on it except the two setInterval() checks that already
+  // assume the Workshop is always the visible screen, which it now is).
   const saved = captureFocus(app);
   app.innerHTML = `
-    <div class="pageHeading">
-      <img class="logo" src="${HEADER_LOGO}" alt="ForgeQuest">
-      <div><h1>${meta}</h1></div>
-      <div class="headerActions">
-        <button type="button" class="iconBtn" title="Achievements" onclick="toggleAchievements()"><img src="${ACHIEVEMENTS_ICON}" alt="Achievements"></button>
-        <button type="button" class="iconBtn" title="How to play" onclick="openTutorial()"><img src="${HELP_ICON}" alt="How to play"></button>
-        <button type="button" class="iconBtn ${state.muted?'muted':''}" title="${state.muted?'Unmute':'Mute'}" onclick="toggleMuted()"><img src="${VOLUME_ICON}" alt="Volume"></button>
-        <button type="button" class="iconBtn" title="Settings" onclick="toggleSettings()"><img src="${SETTINGS_ICON}" alt="Settings"></button>
-      </div>
-    </div>
-    ${state.toast? `<div class="toast">${state.toast}</div>`:''}
-    <div class="gameGrid">
-      <div class="navCol">${renderNav()}</div>
-      <div class="mainCol">
-        ${renderStatbar()}
-        ${mainContent}
-      </div>
-      <div class="sideCol">${renderSidebar()}</div>
-    </div>
+    ${renderWorkshopHud()}
+    ${renderTitlePlaque()}
+    ${renderIconRow()}
+    ${renderSignCol()}
+    ${renderTableWrap()}
+    ${renderDisplayCase()}
+    ${renderShelfPanel()}
+    ${renderTray()}
+    ${renderToast()}
   `;
   restoreFocus(saved);
   saveGame();
