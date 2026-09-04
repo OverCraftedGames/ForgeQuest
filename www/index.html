@@ -6695,13 +6695,81 @@ function restoreFocus(saved){
 // opened directly for testing, or MainForm.cs's own working-area clamp)
 // degrades to "canvas shrinks a bit" instead of "canvas overflows the
 // window," with zero native-side cooperation required.
+// The six hanging nav signs are anchored from the TOP (--wk-sign-top) and
+// sized/spaced for the nominal layout height; the tray is anchored from the
+// BOTTOM (height:var(--wk-tray-h)) of whatever #app actually is. Unlike the
+// display case/shelf (already one flex column, so they can never overlap by
+// construction), these two are anchored from OPPOSITE edges -- so whenever
+// the canvas above ends up shorter than nominal, the tray's top edge moves
+// UP while the sign column's own bottom stays put, and the two can collide
+// (confirmed against a real clamped 1920x993 desktop window: the last sign,
+// Expeditions, overlapped 61px into the tray). Not a fixed CSS trim (the
+// exact overlap depends on how much shorter than nominal the real window
+// ends up, which varies by monitor/taskbar) -- shrinks, in order:
+//  1. the GAP between signs, down to 0 if needed;
+//  2. only if a zero gap still isn't enough (confirmed happening at the
+//     exact 1920x993 case above -- even a zero gap left 16px of overlap),
+//     each sign's own height (image + its hanging cord together),
+//     proportionally, down to a 70%-of-nominal floor so signs never
+//     become illegibly small on a genuinely tight screen.
+// Nominal values are hardcoded here (not read back from computed style)
+// specifically so repeated calls never ratchet down against an
+// already-shrunk previous value -- this runs on every render (boot, every
+// ~1s tick, and right after setLayout()).
+// Hardcoded nominal per-layout values, not read back from computed style --
+// deliberately, for TWO independent reasons: (1) repeated calls (this runs
+// every render()) must never ratchet down against an already-shrunk
+// previous value; (2) body[data-layout="compact"] re-declares ALL of these
+// tokens directly on <body> itself, which -- confirmed by direct
+// measurement, not assumed -- SHADOWS any value read from or written to
+// document.documentElement (<html>) entirely: a custom property's inline
+// value on an ancestor only inherits down to a descendant that has no
+// matching rule of its own, and body's own attribute-selector rule very
+// much matches body itself. This bit BOTH the read (getComputedStyle(html)
+// silently returned wide-mode numbers while state.layout was 'compact',
+// confirmed via direct measurement) and, it turns out, fitCanvasToViewport
+// itself further below -- its documentElement-targeted --wk-w/--wk-h writes
+// had SILENTLY NEVER taken effect in compact mode this entire session
+// (compact's own body-level 1440x700 always won regardless), meaning the
+// canvas-overflow safety net that whole function exists for was only ever
+// real in wide mode. Both now write to document.body.style instead, which
+// -- being inline style directly ON the element the compact rule also
+// targets -- correctly wins either way.
+const NOMINAL_SIGN_TOP = {wide:138, compact:96};
+const NOMINAL_TRAY_H = {wide:238, compact:166};
+const NOMINAL_SIGN_GAP = {wide:9, compact:4};
+const NOMINAL_SIGN_H = {wide:83, compact:46};
+const NOMINAL_HANDLE_H = {wide:22, compact:11};
+function fitSignGapToViewport(canvasH){
+  const layout = state.layout==='compact' ? 'compact' : 'wide';
+  const signTop = NOMINAL_SIGN_TOP[layout];
+  const trayH = NOMINAL_TRAY_H[layout];
+  const signCount = 6;
+  const nominalGap = NOMINAL_SIGN_GAP[layout];
+  const nominalSignH = NOMINAL_SIGN_H[layout];
+  const nominalHandleH = NOMINAL_HANDLE_H[layout];
+
+  const buffer = 8; // a real, visible gap above the tray, not a hairline
+  const available = canvasH - trayH - signTop - buffer;
+  const nominalContentH = signCount * (nominalSignH + nominalHandleH);
+  const gapNeeded = (available - nominalContentH) / (signCount - 1);
+  const gap = Math.max(0, Math.min(nominalGap, gapNeeded));
+  document.body.style.setProperty('--wk-sign-gap', Math.round(gap)+'px');
+
+  const remainingForSigns = available - gap * (signCount - 1);
+  const perSignNominal = nominalSignH + nominalHandleH;
+  const scale = Math.max(0.7, Math.min(1, remainingForSigns / signCount / perSignNominal));
+  document.body.style.setProperty('--wk-sign-h', Math.round(nominalSignH * scale)+'px');
+  document.body.style.setProperty('--wk-handle-h', Math.round(nominalHandleH * scale)+'px');
+}
+
 function fitCanvasToViewport(){
   const nominal = LAYOUT_SIZES[state.layout] || LAYOUT_SIZES.wide;
   const w = Math.min(nominal.w, window.innerWidth);
   const h = Math.min(nominal.h, window.innerHeight);
-  const root = document.documentElement.style;
-  root.setProperty('--wk-w', w+'px');
-  root.setProperty('--wk-h', h+'px');
+  document.body.style.setProperty('--wk-w', w+'px');
+  document.body.style.setProperty('--wk-h', h+'px');
+  fitSignGapToViewport(h);
 }
 
 function render(){
