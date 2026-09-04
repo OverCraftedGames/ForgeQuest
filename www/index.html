@@ -312,6 +312,54 @@
   .wkHammerCard .name{font:700 15px/1 var(--font-body);}
   .wkHammerCard .count{font:600 13px/1 var(--font-body);color:var(--gold);}
   .wkHammerCard .desc{font-size:11px;color:var(--muted);line-height:1.4;}
+
+  /* Achievements modal (ui-overhaul) — restyled onto the shared
+     .wkModalCard shell (w1020, 2-col card grid per §2i). Real ACHIEVEMENTS
+     data + state.unlockedAchievements are unchanged — styling only. Unlike
+     the design handoff's mock achDefs (which track a have/need progress
+     NUMBER per achievement), the real ACHIEVEMENTS array only exposes a
+     boolean check() predicate, so the progress readout/fill here is
+     Earned-or-not rather than a fractional count — see the final report. */
+  .wkAchCard{display:flex;flex-direction:column;gap:7px;padding:15px 18px;border-radius:18px;background:rgba(245,234,216,.6);border:2px solid var(--border);}
+  .wkAchCard.done{background:var(--green-bg);border-color:var(--green-border);}
+  .wkAchTop{display:flex;align-items:baseline;justify-content:space-between;gap:12px;}
+  .wkAchName{font:700 16px/1.2 var(--font-body);display:flex;align-items:center;gap:8px;}
+  .wkAchProgress{font:600 12px/1 var(--font-body);white-space:nowrap;}
+  .wkAchDesc{font-size:12px;color:var(--muted);}
+  .wkAchBar{height:8px;background:rgba(32,30,29,.14);border-radius:999px;overflow:hidden;}
+  .wkAchBarFill{height:100%;}
+
+  /* Settings modal (ui-overhaul) — restyled onto the shared .wkModalCard
+     shell (default w860, one row per setting per §2n). Real settings
+     (mute, music/effects volume, friend code, save, two-step reset) are
+     unchanged — styling only. Deliberately NO "Window size" row this pass —
+     see renderSettingsModal()'s comment. */
+  .wkSettingsRow{display:flex;align-items:center;justify-content:space-between;gap:16px;background:rgba(245,234,216,.6);border:2px solid var(--border);border-radius:18px;padding:16px 20px;}
+  .wkSettingsRow.danger{background:rgba(168,64,47,.07);border-color:rgba(168,64,47,.4);}
+  .wkSettingsRowTitle{font:700 16px/1.2 var(--font-body);}
+  .wkSettingsRowTitle.danger{color:var(--danger);}
+  .wkSettingsRowSub{font-size:13px;color:var(--muted);}
+
+  /* Tutorial / "How to play" modal (ui-overhaul) — restyled onto the shared
+     .wkModalCard shell (default w860, two-column art-left/copy-right layout
+     + dot-rail footer per §2m). TUTORIAL_STEPS' content/step count is
+     unchanged — styling only. TUTORIAL_ART below is a presentation-only
+     per-step illustration lookup (existing real asset paths/constants, no
+     new art), since the real step data has no `art`/`points` fields the
+     way the handoff's mock TUTORIAL array does. */
+  .wkTutGrid{flex:1;min-height:0;display:grid;grid-template-columns:1fr 1fr;gap:22px;overflow-y:auto;overflow-x:hidden;align-items:start;}
+  .wkTutArt{box-sizing:border-box;width:100%;height:250px;border-radius:20px;border:2px solid var(--border);background:rgba(245,234,216,.6);}
+  .wkTutArt.cover{object-fit:cover;filter:saturate(.85) contrast(.95);}
+  .wkTutArt.contain{object-fit:contain;padding:26px;}
+  .wkTutCopy{display:flex;flex-direction:column;gap:12px;min-width:0;}
+  .wkTutTitle{font:400 26px/1.1 var(--font-heading);color:var(--text);}
+  .wkTutBody{font-size:15px;color:var(--muted);line-height:1.6;}
+  .wkTutFooter{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-shrink:0;border-top:2px solid rgba(32,30,29,.14);padding-top:16px;margin-top:16px;}
+  .wkTutDots{display:flex;gap:7px;align-items:center;}
+  .wkTutDot{width:12px;height:12px;border-radius:999px;cursor:pointer;border:none;padding:0;transition:width .18s;background:rgba(32,30,29,.2);}
+  .wkTutDot.current{width:30px;background:var(--accent);}
+  .wkTutDot.past{background:rgba(140,73,26,.45);}
+
   .statbar{
     display:flex;flex-wrap:wrap;gap:14px;background:rgba(245,234,216,.95);border:1.5px solid var(--border);
     border-radius:999px;padding:10px 20px;margin-bottom:16px;font-size:12px;align-items:center;
@@ -582,28 +630,49 @@
   .hammerWedge.disabled{opacity:.35;filter:grayscale(1);cursor:not-allowed;border-color:var(--border);}
   .progresswrap{height:8px;background:rgba(32,30,29,.14);border:none;border-radius:999px;overflow:hidden;margin-top:5px;}
   .progressfill{height:100%;background:var(--accent);transition:width .3s;}
-  .orderCard{
-    background:rgba(245,234,216,.6);border:1.5px solid var(--border);border-radius:var(--radius-md);padding:14px 16px;
-    margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;
+  /* Expeditions overview (ui-overhaul) — restyled onto the shared
+     .wkModalCard shell (w1020, active-run cards + expandable request cards
+     per §2h) rather than the old .orderCard/.expSwordOption shell. All real
+     logic (success chance, slot eligibility, EXPEDITION_TIERS) is unchanged —
+     styling only. */
+  .wkExpActive{display:flex;align-items:center;gap:18px;background:var(--green-bg);border:2px solid var(--green-border);border-radius:20px;padding:16px 20px;}
+  .wkExpActiveBar{width:220px;height:12px;background:rgba(32,30,29,.14);border-radius:999px;overflow:hidden;flex-shrink:0;}
+  .wkExpActiveFill{height:100%;background:var(--green);transition:width .3s;}
+  .wkExpCard{border-radius:20px;padding:16px 20px;background:rgba(245,234,216,.6);border:2px solid var(--border);}
+  .wkExpCard.open{border-color:var(--accent);}
+  .wkExpSlots{display:flex;flex-direction:column;gap:12px;margin-top:14px;}
+  .wkExpSlotLabel{font:600 12px/1 var(--font-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:7px;}
+  .wkExpSlotGrid{display:flex;gap:8px;flex-wrap:wrap;}
+  .wkExpOption{
+    display:flex;flex-direction:column;align-items:center;gap:5px;padding:9px 11px;border-radius:14px;cursor:pointer;
+    background:rgba(245,234,216,.7);border:2px solid var(--border);max-width:100px;
   }
-  .orderCard.fulfillable{border-color:var(--green-border);background:var(--green-bg);}
-  .expDraft{display:flex;flex-direction:column;gap:8px;margin-top:10px;width:100%;}
-  .expSlot{display:flex;flex-direction:column;gap:3px;}
-  .expSwordGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:6px;}
-  .expSwordOption{
-    display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 4px;text-align:center;
-    background:rgba(245,234,216,.6);border:1.5px solid var(--border);border-radius:var(--radius-sm);
-    cursor:pointer;font-size:10px;line-height:1.25;
+  .wkExpOption.selected{border-color:var(--accent);box-shadow:0 0 0 4px rgba(198,113,57,.24);}
+  .wkExpOption img{width:34px;height:34px;object-fit:contain;}
+  .wkExpOption .name{font:600 11px/1.2 var(--font-body);text-align:center;max-width:84px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .wkExpOption .stats{font-size:10px;color:var(--muted);}
+  /* Catalog overview (ui-overhaul) — restyled onto the shared .wkModalCard
+     shell (w1180, fixed 940px card height regardless of selected material —
+     see renderCatalogOverview()'s comment for why — with a 230px material
+     rail + 3-col blade grid per §2e) rather than the old .catalogModal/
+     .catalogItem shell. Real catalog data + material-expertise progress are
+     unchanged — styling only. */
+  .wkCatMatBtn{
+    display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:16px;cursor:pointer;width:100%;text-align:left;
+    border:2px solid var(--border);background:rgba(245,234,216,.6);color:var(--text);font:600 15px/1.2 var(--font-body);
   }
-  .expSwordOption:hover{border-color:var(--accent-600);}
-  .expSwordOption.selected{border-color:var(--accent);background:var(--accent-100);}
-  .expSwordOption img{width:40px;height:40px;object-fit:contain;}
-  .expSwordOption .expSwordName{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
-  .expSwordOption .expSwordStats{color:var(--muted);}
-  .catalogGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:10px;}
-  .catalogItem{background:rgba(245,234,216,.6);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:9px;font-size:11px;}
-  .catalogItem.locked{opacity:.42;}
-  .catalogLore{font-style:italic;opacity:.75;margin-top:3px;}
+  .wkCatMatBtn img{width:32px;height:32px;object-fit:contain;flex-shrink:0;}
+  .wkCatMatBtn .name{flex:1;}
+  .wkCatMatBtn .count{font:700 12px/1 var(--font-body);}
+  .wkCatMatBtn.active{border-color:var(--accent);background:var(--accent-100);}
+  .wkCatMatBtn:disabled{opacity:.42;cursor:not-allowed;}
+  .wkCatGrid{flex:1;min-height:0;display:grid;grid-template-columns:repeat(3,1fr);gap:12px;overflow-y:auto;overflow-x:hidden;align-content:start;}
+  .wkCatEntry{display:flex;flex-direction:column;align-items:center;gap:5px;text-align:center;padding:14px 10px;border-radius:18px;background:rgba(245,234,216,.6);border:2px solid var(--border);}
+  .wkCatEntry.locked{opacity:.55;}
+  .wkCatEntryImg{width:56px;height:56px;object-fit:contain;}
+  .wkCatEntryName{font:600 14px/1.2 var(--font-body);}
+  .wkCatEntryMeta{font-size:11px;color:var(--muted);}
+  .wkCatEntryLore{font:italic 400 11px/1.4 var(--font-body);color:rgba(32,30,29,.62);}
   .matBlock{margin-bottom:16px;}
   .matHeader{font:400 16px/1.1 var(--font-heading);color:var(--text);margin-bottom:6px;}
   .shopRow{
@@ -628,7 +697,6 @@
     background:#f5ead8;border:1.5px solid var(--border);border-radius:var(--radius-lg);padding:22px;
     max-width:520px;width:100%;max-height:85vh;overflow-y:auto;box-shadow:var(--shadow-lg);
   }
-  .wheelModalCard{max-width:340px;text-align:center;}
   .newSwordModalCard{max-width:360px;text-align:center;}
   .newSwordBadge{
     font:700 11px/1 var(--font-body);letter-spacing:.08em;text-transform:uppercase;color:var(--accent-600);
@@ -643,7 +711,7 @@
   .newSwordName{font:400 24px/1.15 var(--font-heading);color:var(--text);margin:0 0 6px;}
   .newSwordMeta{color:var(--muted);font-size:12px;margin-bottom:12px;}
   /* Sword lore (see SWORD_LORE) — shown here on first discovery and again in
-     the Catalog (renderCatalogDetail()'s .catalogLore) any time after. */
+     the Catalog (renderCatalogDetail()'s .wkCatEntryLore) any time after. */
   .newSwordLore{font:italic 400 13px/1.4 var(--font-body);color:var(--text);opacity:.7;margin:0 0 18px;}
   /* The daily-login popup's 7-day readout, reusing newSwordModalCard's shell
      (see renderDailyRewardPopup). Not clickable — only "today" is ever
@@ -656,55 +724,56 @@
   .dailyStripDay.past{opacity:.55;}
   .dailyStripDay.current{border-color:var(--accent);background:var(--accent-100);box-shadow:0 0 0 2px var(--accent) inset;}
   .dailyStripAmt{font-weight:700;font-size:12px;color:var(--gold);}
-  .wheelStage{position:relative;width:260px;height:260px;margin:6px auto 14px;}
+  /* Wheel modal (ui-overhaul) — dial/stage sizing bumped to match the
+     design handoff's §2l (280px stage, 56px hub) inside the shared
+     .wkModalCard(w620) shell. Spin timing/odds/prize math untouched — this
+     is CSS only (openWheel()'s WHEEL_SPIN_MS still drives .wheelDial's
+     transition duration below). */
+  .wheelStage{position:relative;width:280px;height:280px;margin:6px auto 14px;}
   .wheelPointer{
     position:absolute;top:-6px;left:50%;transform:translateX(-50%);width:0;height:0;z-index:3;
-    border-left:13px solid transparent;border-right:13px solid transparent;border-top:20px solid var(--gold);
+    border-left:14px solid transparent;border-right:14px solid transparent;border-top:22px solid var(--gold);
     filter:drop-shadow(0 2px 2px rgba(32,30,29,.4));
   }
   .wheelDial{
-    position:absolute;inset:0;border-radius:50%;border:5px solid var(--gold);box-shadow:var(--shadow-lg);
+    position:absolute;inset:0;border-radius:50%;border:6px solid var(--gold);box-shadow:var(--shadow-lg);
     /* Long, decelerating spin — see openWheel()'s WHEEL_SPIN_MS, which must match this duration. */
     transition:transform 4.3s cubic-bezier(.12,.83,.24,1);
   }
   .wheelWedgeIcon{
-    position:absolute;top:50%;left:50%;width:26px;height:26px;font-size:18px;
+    position:absolute;top:50%;left:50%;width:30px;height:30px;font-size:20px;
     display:flex;align-items:center;justify-content:center;text-shadow:0 1px 2px rgba(0,0,0,.35);
   }
-  .wheelWedgeIcon img{width:22px;height:22px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.4));}
+  .wheelWedgeIcon img{width:26px;height:26px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.4));}
   .wheelHub{
-    position:absolute;top:50%;left:50%;width:46px;height:46px;margin:-23px 0 0 -23px;border-radius:50%;
-    background:var(--panel);border:3px solid var(--gold);z-index:2;
-    display:flex;align-items:center;justify-content:center;font-size:20px;
+    position:absolute;top:50%;left:50%;width:56px;height:56px;margin:-28px 0 0 -28px;border-radius:50%;
+    background:var(--panel);border:4px solid var(--gold);z-index:2;
+    display:flex;align-items:center;justify-content:center;font-size:24px;
   }
-  .mineCard{background:rgba(245,234,216,.6);border:1.5px solid var(--border);border-radius:var(--radius-md);padding:14px;margin-bottom:10px;}
-  .mineCard.locked{opacity:.5;}
-  .mineHeader{display:flex;align-items:center;gap:8px;margin-bottom:5px;}
-  .mineMap{
-    position:relative;width:100%;height:220px;border-radius:var(--radius-md);margin-bottom:16px;
-    background:url("backgrounds/mine-map.jpg") center/cover no-repeat;
-    border:1.5px solid var(--border);overflow:hidden;
-  }
-  .mineNode{
-    position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;
-    gap:3px;cursor:pointer;
-  }
-  .mineNode .icon{
-    position:relative;font-size:24px;width:42px;height:42px;display:flex;align-items:center;justify-content:center;
-    background:#f5ead8;border:2px solid var(--border);border-radius:50%;
-  }
-  .mineNode .label{font-size:10px;color:var(--text);background:rgba(245,234,216,.85);padding:1px 6px;border-radius:999px;white-space:nowrap;}
-  .mineNode.selected .icon{border-color:var(--accent);box-shadow:0 0 0 6px rgba(198,113,57,.14);}
-  .mineNode.locked .icon{opacity:.5;filter:grayscale(1);}
-  .mineNode.locked .label{opacity:.6;}
   .navClose{position:absolute;right:18px;top:16px;height:30px;padding:0 12px;z-index:2;}
-  .minesModal{
-    display:grid;grid-template-columns:1fr 320px;width:min(1100px,92vw);height:min(640px,86vh);
-    background:#f5ead8;border:1.5px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);overflow:hidden;
+  /* Mines overview (ui-overhaul) — restyled onto the shared .wkModalCard
+     shell (w1120, two-column map+detail grid per the design handoff's §2d)
+     rather than the old .minesModal/.mineNode shell. Real mine data
+     (state.mines/mine.pending, unlocked purely by state.level) is unchanged —
+     styling only. */
+  .wkMineWrap{flex:1;display:grid;grid-template-columns:1fr 320px;gap:22px;overflow:hidden;min-height:0;}
+  .wkMineMapBox{
+    position:relative;border-radius:22px;overflow:hidden;border:2px solid var(--border);
+    background:url("backgrounds/mine-map.jpg") center/cover no-repeat;min-height:420px;
   }
-  .minesMapCol{display:flex;flex-direction:column;padding:24px;border-right:1.5px solid var(--border);min-width:0;}
-  .minesDetailCol{display:flex;flex-direction:column;gap:8px;padding:22px 20px;position:relative;overflow-y:auto;min-width:0;}
-  .mineMapModal{flex:1;height:auto;min-height:280px;margin-bottom:0;margin-top:10px;}
+  .wkMineNode{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;}
+  .wkMineNode.locked{opacity:.55;filter:grayscale(1);}
+  .wkMineIcon{
+    position:relative;width:52px;height:52px;border-radius:50%;background:var(--bg);border:3px solid var(--border);
+    display:flex;align-items:center;justify-content:center;font-size:24px;
+  }
+  .wkMineIcon.selected{border-color:var(--accent);box-shadow:0 0 0 7px rgba(198,113,57,.2);}
+  .wkMineIcon.hasStock{outline:3px solid var(--green);outline-offset:3px;}
+  .wkMineLabel{font:600 12px/1 var(--font-body);color:var(--text);background:rgba(245,234,216,.9);padding:4px 10px;border-radius:999px;white-space:nowrap;}
+  .wkMineDetail{display:flex;flex-direction:column;gap:12px;overflow-y:auto;min-width:0;}
+  .wkMineDetailTitle{font:400 24px/1 var(--font-heading);color:var(--text);}
+  .wkMineDetailBody{font-size:14px;color:var(--muted);line-height:1.5;}
+  .wkMineDetailCard{background:rgba(245,234,216,.6);border:2px solid var(--border);border-radius:18px;padding:16px 18px;}
   /* Single-column, unlike minesModal/catalogModal's map+detail split — a
      friend's workshop is just one list of stations, no second pane needed
      — but the same large-popout sizing/shell so it reads as the same kind
@@ -823,22 +892,6 @@
      room to hold 2-3 wrapped lines without overflowing. */
   .friendStationCard .readyActions button,
   .friendStationCard .cookProgress button{white-space:nowrap;}
-  .catalogModal{
-    display:grid;grid-template-columns:340px 1fr;width:min(1100px,92vw);height:min(640px,86vh);
-    background:#f5ead8;border:1.5px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);overflow:hidden;
-  }
-  .catalogList{display:flex;flex-direction:column;padding:22px 20px;border-right:1.5px solid var(--border);background:rgba(32,30,29,.03);min-height:0;}
-  .catalogListScroll{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:5px;}
-  .catalogListItem{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 12px;border-radius:var(--radius-sm);cursor:pointer;}
-  .catalogListItem:hover{background:rgba(198,113,57,.08);}
-  .catalogListItem.active{background:var(--accent-100);color:var(--gold);font-weight:600;}
-  .catalogListItem.locked{opacity:.42;cursor:not-allowed;}
-  .catalogDetail{display:flex;flex-direction:column;padding:24px 26px;position:relative;min-height:0;gap:10px;}
-  .catalogDetailHead{display:flex;flex-direction:column;gap:2px;}
-  @media (max-width:820px){
-    .minesModal, .catalogModal{grid-template-columns:1fr;width:94vw;height:88vh;}
-    .minesMapCol, .catalogList{border-right:none;border-bottom:1.5px solid var(--border);max-height:42%;}
-  }
   .friendCard{
     display:flex;justify-content:space-between;align-items:center;background:rgba(245,234,216,.6);
     border:1.5px solid var(--border);border-radius:var(--radius-md);padding:12px 16px;margin-bottom:9px;flex-wrap:wrap;gap:8px;
@@ -2761,21 +2814,54 @@ function openTutorial(){
 function closeTutorial(){ state.tutorialOpen = false; render(); }
 function tutorialNext(){ state.tutorialStep = Math.min(TUTORIAL_STEPS.length-1, state.tutorialStep+1); render(); }
 function tutorialBack(){ state.tutorialStep = Math.max(0, state.tutorialStep-1); render(); }
+function tutorialGoto(i){ state.tutorialStep = Math.max(0, Math.min(TUTORIAL_STEPS.length-1, i)); render(); }
+// Presentation-only per-step illustration lookup for the two-column tutorial
+// layout (art left, copy right — see renderTutorialModal()) — existing real
+// asset paths/constants already used elsewhere in the game (ingot icon,
+// craft table background, hammer/nav icons, gold icon), picked to match
+// each step's real topic. TUTORIAL_STEPS itself (content + step count) is
+// untouched; this is a styling-only addition since the real step data has
+// no `art`/`fit` fields the way the design handoff's mock TUTORIAL array
+// does.
+const TUTORIAL_ART = [
+  {src:'backgrounds/body-workshop.jpg', fit:'cover'},
+  {src:INGOT_ICON.iron, fit:'contain'},
+  {src:'backgrounds/craft-table-3x3.jpg', fit:'cover'},
+  {src:HAMMER_ICON.smith, fit:'contain'},
+  {src:NAV_ICONS.orders, fit:'contain'},
+  {src:GOLD_ICON, fit:'contain'},
+  {src:NAV_ICONS.friends, fit:'contain'},
+  {src:'backgrounds/nav-expeditions.jpg', fit:'cover'},
+];
 function renderTutorialModal(){
-  const step = TUTORIAL_STEPS[state.tutorialStep];
-  const isFirst = state.tutorialStep===0;
-  const isLast = state.tutorialStep===TUTORIAL_STEPS.length-1;
-  return `<div class="modalBackdrop" onclick="closeTutorial()">
-    <div class="modalCard" onclick="event.stopPropagation()" style="max-width:440px;">
-      <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <span class="wf-lbl small">Step ${state.tutorialStep+1} of ${TUTORIAL_STEPS.length}</span>
-        <button onclick="closeTutorial()">Skip</button>
+  const idx = state.tutorialStep;
+  const step = TUTORIAL_STEPS[idx];
+  const isFirst = idx===0;
+  const isLast = idx===TUTORIAL_STEPS.length-1;
+  const art = TUTORIAL_ART[idx] || TUTORIAL_ART[0];
+  const dots = TUTORIAL_STEPS.map((s,i)=>`<button type="button" class="wkTutDot ${i===idx?'current':i<idx?'past':''}" title="${s.title}" onclick="tutorialGoto(${i})"></button>`).join('');
+  return `<div class="wkModalBackdrop" onclick="closeTutorial()">
+    <div class="wkModalCard" style="width:860px;" onclick="event.stopPropagation()">
+      <div class="wkModalHead">
+        <div>
+          <div class="wkModalTitle">How to play &mdash; ${step.title}</div>
+          <div class="wkModalBlurb">Step ${idx+1} of ${TUTORIAL_STEPS.length} &mdash; click through, or jump with the dots below.</div>
+        </div>
+        <button type="button" class="wkBtn wkModalClose" onclick="closeTutorial()">Skip</button>
       </div>
-      <h3 class="section-title" style="margin:2px 0 10px;">${step.title}</h3>
-      <div class="small" style="line-height:1.6;font-size:12.5px;">${step.body}</div>
-      <div class="row" style="justify-content:space-between;margin-top:20px;">
-        <button ${isFirst?'disabled':''} onclick="tutorialBack()">Back</button>
-        <button class="primary" onclick="${isLast?'closeTutorial()':'tutorialNext()'}">${isLast?'Finish':'Next'}</button>
+      <div class="wkTutGrid">
+        <img class="wkTutArt ${art.fit}" src="${art.src}" alt="">
+        <div class="wkTutCopy">
+          <div class="wkTutTitle">${step.title}</div>
+          <div class="wkTutBody">${step.body}</div>
+        </div>
+      </div>
+      <div class="wkTutFooter">
+        <div class="wkTutDots">${dots}</div>
+        <div class="row" style="gap:10px;align-items:center;">
+          <button type="button" class="wkBtn" ${isFirst?'disabled':''} onclick="tutorialBack()">Back</button>
+          <button type="button" class="wkBtnPri" onclick="${isLast?'closeTutorial()':'tutorialNext()'}">${isLast?'Get forging':'Next'}</button>
+        </div>
       </div>
     </div>
   </div>`;
@@ -5174,15 +5260,15 @@ function renderExpeditionSlotPicker(request, slotIdx){
   const tiles = eligible.map(s=>{
     const selected = s.id===chosenId;
     const art = SWORD_SPRITE_NOTITLE[s.name] || SWORD_SPRITE_FALLBACK_NOTITLE;
-    return `<div class="expSwordOption ${selected?'selected':''}" title="${s.name}" onclick="setExpeditionDraftSlot(${slotIdx}, '${selected?'':s.id}')">
+    return `<div class="wkExpOption ${selected?'selected':''}" title="${s.name}" onclick="setExpeditionDraftSlot(${slotIdx}, '${selected?'':s.id}')">
       <img src="${art}" alt="${s.name}">
-      <div class="expSwordName">${s.name}</div>
-      <div class="expSwordStats">Rank ${s.rank} &middot; AP${s.ap}/DP${s.dp}</div>
+      <div class="name">${s.name}</div>
+      <div class="stats">Rank ${s.rank} &middot; AP${s.ap}/DP${s.dp}</div>
     </div>`;
   }).join('');
-  return `<div class="expSlot">
-    <div class="small">Slot ${slotIdx+1} &mdash; ${expeditionSlotLabel(slot)}</div>
-    ${eligible.length? `<div class="expSwordGrid">${tiles}</div>` : `<div class="small" style="opacity:.7;">No qualifying sword in stock</div>`}
+  return `<div>
+    <div class="wkExpSlotLabel">Slot ${slotIdx+1} &mdash; ${expeditionSlotLabel(slot)}</div>
+    ${eligible.length? `<div class="wkExpSlotGrid">${tiles}</div>` : `<div class="small" style="opacity:.7;">No qualifying sword in stock</div>`}
   </div>`;
 }
 function renderExpeditionRequestCard(request){
@@ -5190,11 +5276,12 @@ function renderExpeditionRequestCard(request){
   const hours = Math.round(tier.durationMs/3600000);
   const slotLines = request.slots.map(expeditionSlotLabel).join(' &middot; ');
   const isDraft = state.expeditionDraft && state.expeditionDraft.requestId===request.id;
-  let bodyHtml;
+  let allFilled = false;
+  let slotsHtml = '';
   if(isDraft){
     const draft = state.expeditionDraft;
     const chosenSwords = draft.swordIds.map(id=>id?state.inventory.find(s=>s.id===id):null);
-    const allFilled = chosenSwords.every(Boolean);
+    allFilled = chosenSwords.every(Boolean);
     let previewHtml = '';
     if(allFilled){
       const value = chosenSwords.reduce((sum,s)=>sum+swordReferenceValue(s),0);
@@ -5202,24 +5289,24 @@ function renderExpeditionRequestCard(request){
       const chance = Math.round(expeditionSuccessChance(power, request.floorPower)*100);
       previewHtml = `<div class="small">Est. success chance: <b>${chance}%</b> &middot; reference value ${value.toLocaleString()}g</div>`;
     }
-    bodyHtml = `<div class="expDraft">
+    slotsHtml = `<div class="wkExpSlots">
         ${[0,1,2].map(i=>renderExpeditionSlotPicker(request,i)).join('')}
         ${previewHtml}
-        <div class="row" style="gap:6px;margin-top:8px;">
-          <button class="primary" onclick="confirmExpeditionDraft()" ${allFilled?'':'disabled'}>Depart</button>
-          <button onclick="cancelExpeditionDraft()">Cancel</button>
-        </div>
       </div>`;
-  } else {
-    bodyHtml = `<button class="primary" onclick="openExpeditionDraft('${request.id}')">Choose swords</button>`;
   }
-  return `<div class="orderCard expeditionCard" style="${isDraft?'flex-direction:column;align-items:stretch;':''}">
-      <div>
-        <b>${request.party}</b> <span class="badge">${tier.label}</span>
-        <div class="small">Needs: ${slotLines}</div>
-        <div class="small">Away ${hours}h &middot; pays roughly ${tier.rewardMult.toFixed(2)}&times; Orders value on success &middot; all 3 swords are consumed on departure either way</div>
+  return `<div class="wkExpCard ${isDraft?'open':''}">
+      <div class="row" style="justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;">
+        <div>
+          <div style="font:700 18px/1.2 var(--font-body);">${request.party} <span class="badge">${tier.label}</span></div>
+          <div class="small">Needs: ${slotLines}</div>
+          <div class="small">Away ${hours}h &middot; pays roughly ${tier.rewardMult.toFixed(2)}&times; Orders value on success &middot; all 3 swords are consumed on departure either way</div>
+        </div>
+        <div class="row" style="gap:10px;">
+          <button type="button" class="wkBtn" onclick="${isDraft?'cancelExpeditionDraft()':`openExpeditionDraft('${request.id}')`}">${isDraft?'Cancel':'Fill party'}</button>
+          ${isDraft? `<button type="button" class="wkBtnPri" onclick="confirmExpeditionDraft()" ${allFilled?'':'disabled'}>Depart</button>` : ''}
+        </div>
       </div>
-      ${bodyHtml}
+      ${slotsHtml}
     </div>`;
 }
 function renderActiveExpeditionCard(exp){
@@ -5227,27 +5314,32 @@ function renderActiveExpeditionCard(exp){
   const remainMs = Math.max(0, exp.startAt+exp.durationMs-Date.now());
   const remainH = Math.floor(remainMs/3600000);
   const remainM = Math.floor((remainMs%3600000)/60000);
-  return `<div class="orderCard">
-      <div>
-        <b>${exp.party}</b> <span class="badge">${tier.label}</span>
+  const pct = Math.min(100, Math.round((1-(remainMs/exp.durationMs))*100));
+  return `<div class="wkExpActive">
+      <div style="flex:1;">
+        <div style="font:700 17px/1.2 var(--font-body);">${exp.party} <span class="badge">${tier.label}</span></div>
         <div class="small">Away with ${exp.swords.map(s=>s.name).join(', ')}</div>
         <div class="small">Returns in ${remainH}h ${remainM}m</div>
       </div>
+      <div class="wkExpActiveBar"><div class="wkExpActiveFill" style="width:${pct}%;"></div></div>
     </div>`;
 }
 function renderExpeditionOverview(){
   const requestCards = state.expeditionRequests.map(renderExpeditionRequestCard).join('');
   const activeCards = state.activeExpeditions.map(renderActiveExpeditionCard).join('');
-  return `<div class="modalBackdrop" onclick="toggleExpeditionsOverview()">
-    <div class="modalCard" onclick="event.stopPropagation()" style="max-width:520px;">
-      <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:14px;">
-        <h3 class="section-title" style="margin:0;">Expeditions</h3>
-        <button onclick="toggleExpeditionsOverview()">Close</button>
+  return `<div class="wkModalBackdrop" onclick="toggleExpeditionsOverview()">
+    <div class="wkModalCard" style="width:1020px;" onclick="event.stopPropagation()">
+      <div class="wkModalHead">
+        <div>
+          <div class="wkModalTitle">Expeditions</div>
+          <div class="wkModalBlurb">Send 3 swords out with a party of adventurers. They're consumed either way, win or lose, so the payout is built to beat what those same swords would earn through Orders.</div>
+        </div>
+        <button type="button" class="wkBtn wkModalClose" onclick="toggleExpeditionsOverview()">Close</button>
       </div>
-      <div class="small" style="margin-bottom:10px;">Send 3 swords out with a party of adventurers. They're consumed either way, win or lose, so the payout is built to beat what those same swords would earn through Orders.</div>
-      ${activeCards? `<div class="section-title" style="font-size:13px;">In progress</div>${activeCards}` : ''}
-      <div class="section-title" style="font-size:13px;margin-top:${activeCards?'10px':'0'};">Available</div>
-      ${requestCards || '<div class="small">No parties currently looking for an escort.</div>'}
+      <div class="wkModalBody">
+        ${activeCards}
+        ${requestCards || '<div class="small">No parties currently looking for an escort.</div>'}
+      </div>
     </div>
   </div>`;
 }
@@ -5279,79 +5371,86 @@ function renderExpeditionResultPopup(){
   </div>`;
 }
 
-// The catalog is a split-panel overlay: a left list of materials (+ a Fusion
+// The catalog is a split-panel overlay: a left rail of materials (+ a Fusion
 // entry) and a right detail pane showing the selected entry's discovered/
-// undiscovered styles, with a prev/next pager between entries.
+// undiscovered styles. Restyled onto the shared .wkModalCard shell (w1180,
+// a FIXED 940px card height regardless of which material is selected — see
+// renderCatalogOverview()'s comment for why — per the design handoff's §2e);
+// real catalog data + material-expertise progress are untouched, styling
+// only. The old prev/next pager between entries is dropped — the rail
+// already gives direct one-click navigation to any material, and the design
+// handoff's own catalog spec has no pager either.
 function catalogNavList(){
   return MATERIALS.filter(m=>state.level>=m.reqLevel).map(m=>m.id).concat(['fusion']);
-}
-
-function renderCatalogPager(prevId, nextId){
-  const label = id => id==='fusion' ? 'Fusion' : matById(id).name;
-  return `<div class="row" style="justify-content:space-between;align-items:center;padding-top:10px;margin-top:10px;border-top:1.5px dashed var(--border);">
-    <button ${prevId?'':'disabled'} onclick="${prevId?`selectCatalogMat('${prevId}')`:''}">&#9664; ${prevId?label(prevId):'Prev'}</button>
-    <span class="small">Click a material for its recipe hint</span>
-    <button ${nextId?'':'disabled'} onclick="${nextId?`selectCatalogMat('${nextId}')`:''}">${nextId?label(nextId):'Next'} &#9654;</button>
-  </div>`;
 }
 
 function renderCatalogDetail(){
   const navList = catalogNavList();
   let id = state.selectedCatalogMatId;
   if(!id || !navList.includes(id)) id = navList[0];
-  const idx = navList.indexOf(id);
-  const prevId = idx>0 ? navList[idx-1] : null;
-  const nextId = idx<navList.length-1 ? navList[idx+1] : null;
 
   if(id==='fusion'){
-    const fusionItems = Object.keys(FUSION).sort().map(key=>{
+    const total = Object.keys(FUSION).length;
+    const found = state.fusionCatalog.size;
+    const entries = Object.keys(FUSION).sort().map(key=>{
       const unlockedPair = fusionUnlockedPair(key);
-      const found = state.fusionCatalog.has(key);
+      const isFound = state.fusionCatalog.has(key);
       const recipe = FUSION[key];
       const parts = key.split('|').map(pid=>matById(pid).name).join(' + ');
       if(!unlockedPair){
-        return `<div class="catalogItem locked"><div>???</div><div class="small">Requires both ores unlocked</div></div>`;
+        return `<div class="wkCatEntry locked">
+          <div class="wkCatEntryImg" style="border-radius:999px;background:rgba(32,30,29,.08);"></div>
+          <div class="wkCatEntryName" style="color:var(--muted);">???</div>
+          <div class="wkCatEntryMeta">Requires both ores unlocked</div>
+        </div>`;
       }
-      return `<div class="catalogItem ${found?'':'locked'}">
-        <div class="rankM">${found? recipe.name : '???'}</div>
-        <div class="small">${found? (parts+' &middot; AP '+recipe.ap+' / DP '+recipe.dp) : parts+' (undiscovered)'}</div>
-        ${found && loreFor(recipe.name)? `<div class="small catalogLore">&ldquo;${loreFor(recipe.name)}&rdquo;</div>` : ''}
+      const img = SWORD_SPRITE[recipe.name] || SWORD_SPRITE_FALLBACK;
+      return `<div class="wkCatEntry ${isFound?'':'locked'}">
+        <img class="wkCatEntryImg" src="${img}" alt="" style="${isFound?'':'filter:grayscale(1) brightness(.5);opacity:.4;'}">
+        <div class="wkCatEntryName rankM">${isFound? recipe.name : '???'}</div>
+        <div class="wkCatEntryMeta">${isFound? (parts+' &middot; AP '+recipe.ap+' / DP '+recipe.dp) : parts+' (undiscovered)'}</div>
+        ${isFound && loreFor(recipe.name)? `<div class="wkCatEntryLore">&ldquo;${loreFor(recipe.name)}&rdquo;</div>` : ''}
       </div>`;
     }).join('');
-    return `<div class="catalogDetailHead">
-      <span class="wf-lbl small">Fusion recipes</span>
-      <h3 class="section-title" style="margin:2px 0 0;">Fusion swords</h3>
-      <div class="small">Load 2 different ores into a station's slots to fuse a rank M sword unique to that pair.</div>
-    </div>
-    <div class="catalogGrid" style="flex:1;overflow-y:auto;grid-template-columns:1fr 1fr;align-content:start;">${fusionItems}</div>
-    ${renderCatalogPager(prevId, nextId)}`;
+    return `<div style="display:flex;align-items:baseline;gap:12px;flex-shrink:0;">
+        <span style="font:400 24px/1 var(--font-heading);color:var(--text);">Fusion blades</span>
+        <span style="font-size:13px;color:var(--muted);">${found} of ${total} discovered</span>
+      </div>
+      <div class="small" style="flex-shrink:0;">Load 2 different ores into a station's slots to fuse a rank M sword unique to that pair.</div>
+      <div class="wkCatGrid">${entries}</div>`;
   }
 
   const m = matById(id);
-  const items = RANKS.map(r=>{
-    const pool = SWORDS[m.id][r] || [];
-    return pool.map(sw=>{
-      const found = state.catalog[m.id].has(sw.name);
-      return `<div class="catalogItem ${found?'':'locked'}">
-        <div class="rank${r}">${found? sw.name : '???'}</div>
-        <div class="small">${found? ('Rank '+r+' &middot; AP '+sw.ap+' / DP '+sw.dp+(sw.el?' &middot; '+sw.el:'')) : 'Undiscovered'}</div>
-        ${found && loreFor(sw.name)? `<div class="small catalogLore">&ldquo;${loreFor(sw.name)}&rdquo;</div>` : ''}
-      </div>`;
-    }).join('');
-  }).join('');
   const totalForMat = RANKS.reduce((s,r)=>s+((SWORDS[m.id][r]||[]).length),0);
   const foundForMat = state.catalog[m.id].size;
   const pct = totalForMat? Math.round(foundForMat/totalForMat*100) : 0;
   // Per-material expertise readout (see the section near HAMMER_QUALITY_CHANCE) —
   // its own progress bar, separate from the discovery one above, since it's
-  // a separate axis (crafts with this material, not styles found).
+  // a separate axis (crafts with this material, not styles found). Only
+  // shown here, per material — kept exactly here, just restyled.
   const expertise = materialExpertiseProgress(m.id);
   const expertisePct = Math.round(expertise.xp/expertise.toNext*100);
-  return `<div class="catalogDetailHead">
-      <span class="wf-lbl small">Material ${idx+1} of ${navList.length}</span>
-      <h3 class="section-title" style="margin:2px 0 0;font-size:26px;">${m.name}</h3>
-      <div class="small">Craft with this ore to discover new styles. Each first discovery earns bonus reputation.</div>
-      <div class="row" style="gap:10px;margin-top:6px;align-items:center;">
+
+  const entries = RANKS.map(r=>{
+    const pool = SWORDS[m.id][r] || [];
+    return pool.map(sw=>{
+      const found = state.catalog[m.id].has(sw.name);
+      const img = SWORD_SPRITE[sw.name] || SWORD_SPRITE_FALLBACK;
+      return `<div class="wkCatEntry ${found?'':'locked'}">
+        <img class="wkCatEntryImg" src="${img}" alt="" style="${found?'':'filter:grayscale(1) brightness(.5);opacity:.4;'}">
+        <div class="wkCatEntryName rank${r}">${found? sw.name : '???'}</div>
+        <div class="wkCatEntryMeta">${found? ('Rank '+r+' &middot; AP '+sw.ap+' / DP '+sw.dp+(sw.el?' &middot; '+sw.el:'')) : 'Undiscovered'}</div>
+        ${found && loreFor(sw.name)? `<div class="wkCatEntryLore">&ldquo;${loreFor(sw.name)}&rdquo;</div>` : ''}
+      </div>`;
+    }).join('');
+  }).join('');
+
+  return `<div style="display:flex;align-items:baseline;gap:12px;flex-shrink:0;">
+      <span style="font:400 24px/1 var(--font-heading);color:var(--text);">${m.name} blades</span>
+      <span style="font-size:13px;color:var(--muted);">${foundForMat} of ${totalForMat} discovered</span>
+    </div>
+    <div style="flex-shrink:0;">
+      <div class="row" style="gap:10px;align-items:center;">
         <div class="barwrap" style="height:8px;"><div class="barfill" style="width:${pct}%;"></div></div>
         <span class="small" style="white-space:nowrap;">${foundForMat} / ${totalForMat}</span>
       </div>
@@ -5361,28 +5460,33 @@ function renderCatalogDetail(){
         <span class="small" style="white-space:nowrap;">${expertise.xp} / ${expertise.toNext}</span>
       </div>
     </div>
-    <div class="catalogGrid" style="flex:1;overflow-y:auto;grid-template-columns:1fr 1fr;align-content:start;">${items}</div>
-    ${renderCatalogPager(prevId, nextId)}`;
+    <div class="wkCatGrid">${entries}</div>`;
 }
 
 function renderCatalogOverview(){
-  const matRows = MATERIALS.map(m=>{
+  const matRail = MATERIALS.map(m=>{
     const locked = state.level<m.reqLevel;
-    let countLabel = 'Locked';
+    let countLabel = 'Locked', countColor = 'var(--muted)';
     if(!locked){
       const total = RANKS.reduce((s,r)=>s+((SWORDS[m.id][r]||[]).length),0);
-      countLabel = state.catalog[m.id].size+' / '+total;
+      const found = state.catalog[m.id].size;
+      countLabel = found+'/'+total;
+      countColor = found>=total ? 'var(--green)' : found>0 ? 'var(--gold)' : 'var(--muted)';
     }
     const active = state.selectedCatalogMatId===m.id || (!state.selectedCatalogMatId && !locked && catalogNavList()[0]===m.id);
-    return `<div class="catalogListItem ${active?'active':''} ${locked?'locked':''}" onclick="${locked?'':`selectCatalogMat('${m.id}')`}">
-      <span>${m.name}</span><span class="small">${countLabel}</span>
-    </div>`;
+    return `<button type="button" class="wkCatMatBtn ${active?'active':''}" ${locked?'disabled':`onclick="selectCatalogMat('${m.id}')"`}>
+      <img src="${INGOT_ICON[m.id]}" alt="${m.name}">
+      <span class="name">${m.name}</span>
+      <span class="count" style="color:${countColor};">${countLabel}</span>
+    </button>`;
   }).join('');
   const fusionActive = state.selectedCatalogMatId==='fusion';
   const fusionLabel = Object.keys(FUSION).length;
-  const fusionRow = `<div class="catalogListItem ${fusionActive?'active':''}" onclick="selectCatalogMat('fusion')">
-    <span>Fusion swords</span><span class="small">${state.fusionCatalog.size} / ${fusionLabel}</span>
-  </div>`;
+  const fusionRow = `<button type="button" class="wkCatMatBtn ${fusionActive?'active':''}" onclick="selectCatalogMat('fusion')">
+    <img src="${HAMMER_ICON.magic}" alt="Fusion">
+    <span class="name">Fusion swords</span>
+    <span class="count" style="color:${state.fusionCatalog.size>=fusionLabel?'var(--green)':state.fusionCatalog.size>0?'var(--gold)':'var(--muted)'};">${state.fusionCatalog.size}/${fusionLabel}</span>
+  </button>`;
 
   let totalDiscovered = 0, totalStyles = 0;
   MATERIALS.forEach(m=>{
@@ -5393,19 +5497,20 @@ function renderCatalogOverview(){
   totalStyles += Object.keys(FUSION).length;
   totalDiscovered += state.fusionCatalog.size;
 
-  return `<div class="modalBackdrop" onclick="closeCatalogOverview()">
-    <div class="catalogModal" onclick="event.stopPropagation()">
-      <div class="catalogList">
-        <span class="wf-lbl small">The catalog</span>
-        <h3 class="section-title" style="margin:2px 0 12px;">Materials</h3>
-        <div class="catalogListScroll">${matRows}${fusionRow}</div>
-        <div class="row" style="justify-content:space-between;padding-top:10px;border-top:1.5px dashed var(--border);margin-top:8px;">
-          <span class="small">Total discovered</span><b>${totalDiscovered} / ${totalStyles}</b>
+  return `<div class="wkModalBackdrop" onclick="closeCatalogOverview()">
+    <div class="wkModalCard" style="width:1180px;height:940px;flex-shrink:0;" onclick="event.stopPropagation()">
+      <div class="wkModalHead">
+        <div>
+          <div class="wkModalTitle">Catalog</div>
+          <div class="wkModalBlurb">${totalDiscovered} of ${totalStyles} blades discovered &mdash; ${totalStyles-Object.keys(FUSION).length} forged from a single ore, ${Object.keys(FUSION).length} found by fusing two.</div>
         </div>
+        <button type="button" class="wkBtn wkModalClose" onclick="closeCatalogOverview()">Close</button>
       </div>
-      <div class="catalogDetail">
-        <button class="navClose" onclick="closeCatalogOverview()">Close &times;</button>
-        ${renderCatalogDetail()}
+      <div style="flex:1;display:grid;grid-template-columns:230px 1fr;gap:22px;overflow:hidden;min-height:0;">
+        <div style="display:flex;flex-direction:column;gap:7px;overflow-y:auto;padding-right:4px;">${matRail}${fusionRow}</div>
+        <div style="display:flex;flex-direction:column;gap:12px;min-width:0;overflow:hidden;">
+          ${renderCatalogDetail()}
+        </div>
       </div>
     </div>
   </div>`;
@@ -5822,101 +5927,144 @@ function renderProfileModal(){
   </div>`;
 }
 
+// Restyled onto the shared .wkModalCard shell (default w860, one row per
+// setting per the design handoff's §2n). Deliberately NO "Window size" row
+// this pass — the handoff's two-size layout picker is a later phase (native
+// window-resize bridge + the compact breakpoint don't exist yet), so a
+// picker here would be a dead control. All real settings (mute, music/
+// effects volume, friend code, save, two-step reset) plus the Name row
+// (avatar/title — not in the handoff at all, kept here per the same
+// judgment call other undocumented systems got) are unchanged — styling
+// only.
 function renderSettingsModal(){
-  return `<div class="modalBackdrop" onclick="toggleSettings()">
-    <div class="modalCard" onclick="event.stopPropagation()">
-      <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:14px;">
-        <h3 class="section-title" style="margin:0;">Settings</h3>
-        <button onclick="toggleSettings()">Close</button>
-      </div>
-      <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:14px;">
-        <span class="small">Name</span>
-        <span class="row" style="gap:8px;align-items:center;">
-          ${renderAvatar(state.avatarId, state.username)}
-          <span style="font-weight:700;">${state.username||'—'}${titleFor(state.titleId)? ` <span style="color:var(--gold);font-weight:400;">&middot; ${titleFor(state.titleId)}</span>` : ''}</span>
-        </span>
-      </div>
-      <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:14px;">
-        <span class="small">Friend code</span>
-        ${state.friendStatus==='ready' ? `
-          <span class="row" style="gap:6px;align-items:center;">
-            <span style="font-weight:700;letter-spacing:.5px;">${state.friendCode}</span>
-            <button onclick="copyFriendCode()">Copy</button>
-          </span>
-        ` : state.friendStatus==='offline' ? `
-          <span class="small">Offline — will retry</span>
-        ` : `
-          <span class="small">Connecting…</span>
-        `}
-      </div>
-      <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:14px;">
-        <span class="small">Sound</span>
-        <button onclick="toggleMuted()">${state.muted?'Unmute':'Mute'}</button>
-      </div>
-      <div style="margin-bottom:10px;">
-        <div class="row" style="justify-content:space-between;">
-          <span class="small">Music</span>
-          <span class="small" id="musicVolLabel">${state.musicVolume}%</span>
+  const savedLabel = state.lastSaveAt ? 'Saved '+Math.max(0,Math.round((Date.now()-state.lastSaveAt)/1000))+'s ago' : 'Not saved yet';
+  return `<div class="wkModalBackdrop" onclick="toggleSettings()">
+    <div class="wkModalCard" style="width:860px;" onclick="event.stopPropagation()">
+      <div class="wkModalHead">
+        <div>
+          <div class="wkModalTitle">Settings</div>
+          <div class="wkModalBlurb">Audio, save data and your friend code.</div>
         </div>
-        <input type="range" min="0" max="100" value="${state.musicVolume}"
-          oninput="setMusicVolume(this.value)" onchange="saveGame()">
+        <button type="button" class="wkBtn wkModalClose" onclick="toggleSettings()">Close</button>
       </div>
-      <div style="margin-bottom:14px;">
-        <div class="row" style="justify-content:space-between;">
-          <span class="small">Effects</span>
-          <span class="small" id="sfxVolLabel">${state.sfxVolume}%</span>
-        </div>
-        <input type="range" min="0" max="100" value="${state.sfxVolume}"
-          oninput="setSfxVolume(this.value)" onchange="saveGame()">
-      </div>
-      <div class="row" style="justify-content:space-between;align-items:center;">
-        <span class="small">${state.lastSaveAt ? 'Saved '+Math.max(0,Math.round((Date.now()-state.lastSaveAt)/1000))+'s ago' : 'Not saved yet'}</span>
-        <button onclick="saveGame();render();">Save now</button>
-      </div>
-      <div style="margin-top:16px;padding-top:14px;border-top:1px solid rgba(32,30,29,.15);">
-        ${state.settingsResetConfirm ? `
-          <div class="small" style="color:#a33;margin-bottom:8px;">This permanently erases your gold, ore, swords, orders, and progress. This cannot be undone.</div>
-          <div class="row" style="gap:8px;">
-            <button style="flex:1;" onclick="cancelResetGameProfile()">Cancel</button>
-            <button style="flex:1;background:#a33;color:#fff;border-color:#a33;" onclick="confirmResetGameProfile()">Yes, erase everything</button>
+      <div class="wkModalBody">
+        <div class="wkSettingsRow">
+          <div>
+            <div class="wkSettingsRowTitle">Name</div>
+            <div class="wkSettingsRowSub">Your avatar and title, shown to friends who visit.</div>
           </div>
-        ` : `
-          <button style="width:100%;" onclick="requestResetGameProfile()">Reset game profile</button>
-        `}
+          <span class="row" style="gap:8px;align-items:center;flex-shrink:0;">
+            ${renderAvatar(state.avatarId, state.username)}
+            <span style="font-weight:700;">${state.username||'&mdash;'}${titleFor(state.titleId)? ` <span style="color:var(--gold);font-weight:400;">&middot; ${titleFor(state.titleId)}</span>` : ''}</span>
+          </span>
+        </div>
+        <div class="wkSettingsRow">
+          <div>
+            <div class="wkSettingsRowTitle">Your friend code</div>
+            <div class="wkSettingsRowSub">Share it and a friend can visit your workshop.</div>
+          </div>
+          ${state.friendStatus==='ready' ? `
+            <div class="row" style="gap:10px;align-items:center;flex-shrink:0;">
+              <span style="font:700 20px/1 var(--font-body);letter-spacing:.08em;color:var(--gold);background:var(--accent-100);border:2px solid var(--accent);border-radius:999px;padding:11px 20px;">${state.friendCode}</span>
+              <button type="button" class="wkBtn" onclick="copyFriendCode()">Copy</button>
+            </div>
+          ` : state.friendStatus==='offline' ? `<span class="small">Offline &mdash; will retry</span>` : `<span class="small">Connecting&hellip;</span>`}
+        </div>
+        <div class="wkSettingsRow">
+          <div>
+            <div class="wkSettingsRowTitle">Sound</div>
+            <div class="wkSettingsRowSub">Mute music and effects.</div>
+          </div>
+          <button type="button" class="${state.muted?'wkBtn':'wkBtnPri'}" style="padding:0 30px;" onclick="toggleMuted()">${state.muted?'Off':'On'}</button>
+        </div>
+        <div class="wkSettingsRow">
+          <div>
+            <div class="wkSettingsRowTitle">Music volume</div>
+            <div class="wkSettingsRowSub" id="musicVolLabel">${state.musicVolume}%</div>
+          </div>
+          <div class="row" style="align-items:center;gap:14px;width:300px;flex-shrink:0;">
+            <input type="range" min="0" max="100" value="${state.musicVolume}" style="flex:1;"
+              oninput="setMusicVolume(this.value)" onchange="saveGame()">
+          </div>
+        </div>
+        <div class="wkSettingsRow">
+          <div>
+            <div class="wkSettingsRowTitle">Effects volume</div>
+            <div class="wkSettingsRowSub" id="sfxVolLabel">${state.sfxVolume}%</div>
+          </div>
+          <div class="row" style="align-items:center;gap:14px;width:300px;flex-shrink:0;">
+            <input type="range" min="0" max="100" value="${state.sfxVolume}" style="flex:1;"
+              oninput="setSfxVolume(this.value)" onchange="saveGame()">
+          </div>
+        </div>
+        <div class="wkSettingsRow">
+          <div>
+            <div class="wkSettingsRowTitle">Save data</div>
+            <div class="wkSettingsRowSub">${savedLabel}</div>
+          </div>
+          <button type="button" class="wkBtn" onclick="saveGame();render();">Save now</button>
+        </div>
+        <div class="wkSettingsRow danger">
+          <div>
+            <div class="wkSettingsRowTitle danger">Reset progress</div>
+            <div class="wkSettingsRowSub">${state.settingsResetConfirm? 'This permanently erases your gold, ore, swords, orders, and progress. This cannot be undone.' : 'Wipes gold, blades, tables and mines. This cannot be undone.'}</div>
+          </div>
+          ${state.settingsResetConfirm ? `
+            <div class="row" style="gap:10px;align-items:center;flex-shrink:0;">
+              <button type="button" class="wkBtn" onclick="cancelResetGameProfile()">Keep it</button>
+              <button type="button" class="wkBtn" style="border-color:var(--danger);background:var(--danger);color:#fdf6ec;" onclick="confirmResetGameProfile()">Yes, erase everything</button>
+            </div>
+          ` : `
+            <button type="button" class="wkBtn" style="border-color:rgba(168,64,47,.5);color:var(--danger);" onclick="requestResetGameProfile()">Reset game profile</button>
+          `}
+        </div>
       </div>
     </div>
   </div>`;
 }
 
+// Restyled onto the shared .wkModalCard shell (w1020, 2-col card grid per
+// §2i). Real ACHIEVEMENTS/state.unlockedAchievements are unchanged — styling
+// only. The design handoff's mock achDefs track a have/need progress NUMBER
+// per achievement; the real ACHIEVEMENTS array only exposes a boolean
+// check() predicate (see checkAchievements()), so the fill/label here is
+// Earned-or-Locked rather than a fractional count.
 function renderAchievementsModal(){
   const unlockedCount = ACHIEVEMENTS.filter(a=>state.unlockedAchievements.has(a.id)).length;
-  const rows = ACHIEVEMENTS.map(a=>{
+  const cards = ACHIEVEMENTS.map(a=>{
     const done = state.unlockedAchievements.has(a.id);
-    return `<div class="row" style="justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(32,30,29,.1);opacity:${done?'1':'.5'};">
-      <div class="row" style="align-items:center;gap:10px;">
-        <span style="font-size:22px;">${a.icon}</span>
-        <div>
-          <div style="font-weight:700;">${a.name}</div>
-          <div class="small">${a.desc} &middot; +${ACHIEVEMENT_MARK_REWARD} forge marks</div>
-        </div>
+    return `<div class="wkAchCard ${done?'done':''}">
+      <div class="wkAchTop">
+        <div class="wkAchName">${a.icon} ${a.name}</div>
+        <div class="wkAchProgress" style="color:${done?'var(--green)':'var(--muted)'};">${done?'Earned':'Locked'}</div>
       </div>
-      <span style="font-size:18px;">${done?'✅':'🔒'}</span>
+      <div class="wkAchDesc">${a.desc} &middot; +${ACHIEVEMENT_MARK_REWARD} forge marks</div>
+      <div class="wkAchBar"><div class="wkAchBarFill" style="width:${done?100:0}%;background:${done?'var(--green)':'var(--accent)'};"></div></div>
     </div>`;
   }).join('');
-  return `<div class="modalBackdrop" onclick="toggleAchievements()">
-    <div class="modalCard" onclick="event.stopPropagation()">
-      <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:14px;">
-        <h3 class="section-title" style="margin:0;">Achievements (${unlockedCount}/${ACHIEVEMENTS.length})</h3>
-        <button onclick="toggleAchievements()">Close</button>
+  return `<div class="wkModalBackdrop" onclick="toggleAchievements()">
+    <div class="wkModalCard" style="width:1020px;" onclick="event.stopPropagation()">
+      <div class="wkModalHead">
+        <div>
+          <div class="wkModalTitle">Achievements</div>
+          <div class="wkModalBlurb">${unlockedCount} of ${ACHIEVEMENTS.length} earned &middot; each pays ${ACHIEVEMENT_MARK_REWARD} forge marks.</div>
+        </div>
+        <button type="button" class="wkBtn wkModalClose" onclick="toggleAchievements()">Close</button>
       </div>
-      <div style="max-height:60vh;overflow-y:auto;">${rows}</div>
+      <div class="wkModalBody" style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;align-content:start;">${cards}</div>
     </div>
   </div>`;
 }
 
 // The dial's visual slices are built from the exact same WHEEL_SEGMENTS pct
 // values the odds come from (see openWheel()), so the wheel can never show a
-// bigger or smaller wedge than a segment's real chance.
+// bigger or smaller wedge than a segment's real chance. Restyled onto the
+// shared .wkModalCard shell (w620 per §2l) — spin timing/odds/prize logic
+// (openWheel()) is untouched, styling only. There's no separate in-modal
+// "Spin" button (unlike the design handoff's mock) because the real spin
+// trigger is the HUD's Wheel button (openWheel()), which opens this modal
+// AND starts the spin in one action — this modal is purely the animation +
+// result readout for that single real trigger.
 function renderWheelModal(){
   let cum = 0;
   const wedges = WHEEL_SEGMENTS.map(seg=>{ const start=cum; cum+=seg.pct; return {seg, start, end:cum}; });
@@ -5929,21 +6077,26 @@ function renderWheelModal(){
     return '<div class="wheelWedgeIcon" style="transform:translate(-50%,-50%) rotate('+centerDeg+'deg) translateY(-'+iconRadius+'px);">'+iconHtml+'</div>';
   }).join('');
   const resultSeg = !state.wheelSpinning && state.wheelResultSegId ? WHEEL_SEGMENTS.find(s=>s.id===state.wheelResultSegId) : null;
-  return `<div class="modalBackdrop" onclick="closeWheel()">
-    <div class="modalCard wheelModalCard" onclick="event.stopPropagation()">
-      <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:6px;">
-        <h3 class="section-title" style="margin:0;">Wheel of Fortune</h3>
-        <button onclick="closeWheel()">Close</button>
-      </div>
-      <div class="wheelStage">
-        <div class="wheelPointer"></div>
-        <div class="wheelDial" id="wheelDial" style="transform:rotate(${state.wheelRotationDeg||0}deg);background:conic-gradient(${gradientStops});">
-          ${icons}
+  return `<div class="wkModalBackdrop" onclick="closeWheel()">
+    <div class="wkModalCard" style="width:620px;" onclick="event.stopPropagation()">
+      <div class="wkModalHead">
+        <div>
+          <div class="wkModalTitle">Spin the wheel</div>
+          <div class="wkModalBlurb">One free spin every ninety seconds.</div>
         </div>
-        <div class="wheelHub">&#127920;</div>
+        <button type="button" class="wkBtn wkModalClose" onclick="closeWheel()">Close</button>
       </div>
-      <div class="small" style="min-height:20px;text-align:center;">
-        ${state.wheelSpinning ? 'Spinning&hellip;' : (resultSeg ? 'Landed on: <b>'+resultSeg.label+'</b>' : 'Good luck!')}
+      <div class="wkModalBody" style="align-items:center;">
+        <div class="wheelStage">
+          <div class="wheelPointer"></div>
+          <div class="wheelDial" id="wheelDial" style="transform:rotate(${state.wheelRotationDeg||0}deg);background:conic-gradient(${gradientStops});">
+            ${icons}
+          </div>
+          <div class="wheelHub">&#127920;</div>
+        </div>
+        <div class="small" style="min-height:20px;text-align:center;">
+          ${state.wheelSpinning ? 'Spinning&hellip;' : (resultSeg ? 'Landed on: <b>'+resultSeg.label+'</b>' : 'Good luck!')}
+        </div>
       </div>
     </div>
   </div>`;
@@ -6039,18 +6192,13 @@ function renderMineOverview(){
   const nodes = state.mines.map(mine=>{
     const unlocked = state.level>=mine.reqLevel;
     const selected = state.selectedMineId===mine.id;
-    let progressHtml = '';
     const pendingTotal = unlocked ? minePendingTotal(mine) : 0;
-    if(unlocked){
-      const sinceTick = (Date.now()-mine.lastTick) % mine.interval;
-      const pct = Math.round((sinceTick/mine.interval)*100);
-      progressHtml = `<div class="barwrap" style="flex:none;width:64px;height:6px;min-width:0;"><div class="barfill" style="width:${pct}%;"></div></div>`;
-    }
-    return `<div class="mineNode ${unlocked?'':'locked'} ${selected?'selected':''}"
-      style="left:${mine.x}%;top:${mine.y}%;" onclick="selectMine('${mine.id}')">
-      <div class="icon">${unlocked? mine.icon : '&#128274;'}${pendingTotal>0? `<span class="badge" style="position:absolute;top:-6px;right:-6px;background:var(--green);color:#fdf6ec;border-color:var(--green);">${pendingTotal}</span>`:''}</div>
-      <div class="label">${mine.name}</div>
-      ${progressHtml}
+    return `<div class="wkMineNode ${unlocked?'':'locked'}" style="left:${mine.x}%;top:${mine.y}%;" title="${mine.name}" onclick="selectMine('${mine.id}')">
+      <div class="wkMineIcon ${selected?'selected':''} ${pendingTotal>0?'hasStock':''}">
+        ${unlocked? mine.icon : '&#128274;'}
+        ${pendingTotal>0? `<span class="badge" style="position:absolute;top:-6px;right:-6px;background:var(--green);color:#fdf6ec;border-color:var(--green);">${pendingTotal}</span>`:''}
+      </div>
+      <div class="wkMineLabel">${unlocked? mine.name + (pendingTotal? ' &middot; '+pendingTotal : '') : '&#128274; ' + mine.name}</div>
     </div>`;
   }).join('');
   const unlockedCount = state.mines.filter(m=>state.level>=m.reqLevel).length;
@@ -6058,12 +6206,10 @@ function renderMineOverview(){
   const mine = state.mines.find(m=>m.id===state.selectedMineId);
   let detail;
   if(!mine){
-    detail = `<div class="small">Tap a mine on the map to view its rate and ore chances.</div>`;
+    detail = `<div class="wkMineDetailBody">Tap a mine on the map to view its rate and ore chances.</div>`;
   } else if(state.level<mine.reqLevel){
-    detail = `<div class="mineCard locked">
-      <div class="mineHeader"><span style="font-size:24px;">${mine.icon}</span><b>${mine.name}</b></div>
-      <div class="small">Unlocks at business level ${mine.reqLevel}.</div>
-    </div>`;
+    detail = `<div class="wkMineDetailTitle">${mine.icon} ${mine.name}</div>
+      <div class="wkMineDetailBody">Sealed. Unlocking needs business level ${mine.reqLevel}. It then digs ore on its own, forever.</div>`;
   } else {
     const sinceTick = (Date.now()-mine.lastTick) % mine.interval;
     const pct = Math.round((sinceTick/mine.interval)*100);
@@ -6073,43 +6219,37 @@ function renderMineOverview(){
     // (oreChanceTable, driven by mineRoll()) doesn't apply to them at all,
     // so they get their own plain description instead of a "chances" list.
     const yieldHtml = mine.fixedOre
-      ? `<div class="small" style="margin-bottom:6px;">Produces ${mine.minYield}&ndash;${mine.maxYield} ${matById(mine.fixedOre).name} ore every ${rateLabel}, held here (up to ${MINE_PENDING_CAP} total) until you collect it &mdash; guaranteed, no ore-chance roll involved. A small safety net so you're never fully stuck with no ore or gold.</div>`
-      : `<div class="small" style="margin-bottom:6px;">Produces 1 ore every ${rateLabel}, held here (up to ${MINE_PENDING_CAP} total, any mix of materials) until you collect it. This is slow, passive income &mdash; not a primary ore source.</div>
-      <div class="small" style="margin-bottom:2px;"><b>Ore chances</b></div>
-      ${oreChanceTable().map(c=>`<div class="small">${c.name}${c.locked?' (locked ore, rare)':''}: ${c.pct}%</div>`).join('')}`;
+      ? `<div class="wkMineDetailBody">Produces ${mine.minYield}&ndash;${mine.maxYield} ${matById(mine.fixedOre).name} ore every ${rateLabel}, held here (up to ${MINE_PENDING_CAP} total) until you collect it &mdash; guaranteed, no ore-chance roll involved. A small safety net so you're never fully stuck with no ore or gold.</div>`
+      : `<div class="wkMineDetailBody">Produces 1 ore every ${rateLabel}, held here (up to ${MINE_PENDING_CAP} total, any mix of materials) until you collect it. This is slow, passive income &mdash; not a primary ore source.
+        <div style="margin-top:6px;"><b>Ore chances</b></div>
+        ${oreChanceTable().map(c=>`<div>${c.name}${c.locked?' (locked ore, rare)':''}: ${c.pct}%</div>`).join('')}</div>`;
     const pendingEntries = Object.entries(mine.pending||{}).filter(([,n])=>n>0);
     const pendingTotal = pendingEntries.reduce((s,[,n])=>s+n,0);
     const pendingHtml = pendingEntries.length
       ? pendingEntries.map(([matId,n])=>`<span class="badge" style="margin:0 4px 4px 0;">${matById(matId).name} &times;${n}</span>`).join('')
       : '<div class="small">Nothing waiting to be collected yet.</div>';
-    detail = `<div class="mineCard">
-      <div class="mineHeader"><span style="font-size:24px;">${mine.icon}</span><b>${mine.name}</b></div>
+    detail = `<div class="wkMineDetailTitle">${mine.icon} ${mine.name}</div>
       ${yieldHtml}
-      <div class="progresswrap" style="margin-top:8px;"><div class="progressfill" style="width:${pct}%;"></div></div>
-      <div class="small" style="margin:8px 0 4px;"><b>Waiting to collect${pendingTotal? ' ('+pendingTotal+'/'+MINE_PENDING_CAP+')':''}</b></div>
-      <div>${pendingHtml}</div>
-      <button style="width:100%;margin-top:8px;" ${pendingTotal? '' : 'disabled'} onclick="collectMineOre('${mine.id}')">Collect</button>
-    </div>`;
+      <div class="wkMineDetailCard">
+        <div class="progresswrap" style="margin-top:0;"><div class="progressfill" style="width:${pct}%;"></div></div>
+        <div class="small" style="margin:8px 0 4px;"><b>Waiting to collect${pendingTotal? ' ('+pendingTotal+'/'+MINE_PENDING_CAP+')':''}</b></div>
+        <div>${pendingHtml}</div>
+        <button class="wkBtnPri" style="width:100%;margin-top:8px;" ${pendingTotal? '' : 'disabled'} onclick="collectMineOre('${mine.id}')">Collect</button>
+      </div>`;
   }
 
-  return `<div class="modalBackdrop" onclick="closeMineOverview()">
-    <div class="minesModal" onclick="event.stopPropagation()">
-      <div class="minesMapCol">
-        <div class="row" style="justify-content:space-between;align-items:flex-start;">
-          <div>
-            <span class="wf-lbl small">Mines</span>
-            <h3 class="section-title" style="margin:2px 0 4px;">The dig sites</h3>
-            <div class="small" style="max-width:400px;">Mines generate ore passively once your business level is high enough. Pick a site on the map.</div>
-          </div>
-          <span class="badge" style="white-space:nowrap;">${unlockedCount} of ${state.mines.length} unlocked</span>
+  return `<div class="wkModalBackdrop" onclick="closeMineOverview()">
+    <div class="wkModalCard" style="width:1120px;" onclick="event.stopPropagation()">
+      <div class="wkModalHead">
+        <div>
+          <div class="wkModalTitle">Mines</div>
+          <div class="wkModalBlurb">Passive ore, dug while you work the forge &mdash; ${unlockedCount} of ${state.mines.length} unlocked.</div>
         </div>
-        <div class="mineMap mineMapModal">${nodes}</div>
+        <button type="button" class="wkBtn wkModalClose" onclick="closeMineOverview()">Close</button>
       </div>
-      <div class="minesDetailCol">
-        <button class="navClose" onclick="closeMineOverview()">Close &times;</button>
-        <span class="wf-lbl small">Selected site</span>
-        <h3 class="section-title" style="margin:2px 0 8px;">${mine? mine.name : 'None selected'}</h3>
-        ${detail}
+      <div class="wkMineWrap">
+        <div class="wkMineMapBox">${nodes}</div>
+        <div class="wkMineDetail">${detail}</div>
       </div>
     </div>
   </div>`;
