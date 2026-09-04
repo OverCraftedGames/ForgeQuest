@@ -18,13 +18,14 @@ public class MainForm : Form
     public MainForm()
     {
         Text = "ForgeQuest";
-        // Client area (not outer Size/Width/Height — see ApplyWindowSize below
-        // for why that distinction matters), matching state.layout's default
-        // of 'wide' (1920x1080) in index.html. Was a plain Width/Height of
-        // 1440x900 pre-ui-overhaul, which — being the OUTER window size, title
-        // bar and borders included — never actually gave the page a full
-        // 1440x900 content area to render into to begin with.
-        ClientSize = new Size(1920, 1080);
+        // The actual default ClientSize is applied in InitializeAsync (via
+        // ApplyWindowSize), not here — it needs Screen.FromControl(this)'s
+        // WorkingArea to clamp against, which needs a real window handle
+        // that only reliably reflects the correct current monitor once the
+        // form is actually loading, not mid-construction. A modest interim
+        // size just avoids a flash of the WinForms default (300x300-ish)
+        // for the brief moment before that runs.
+        ClientSize = new Size(1280, 800);
         MinimumSize = new Size(1000, 650);
         StartPosition = FormStartPosition.CenterScreen;
 
@@ -54,6 +55,13 @@ public class MainForm : Form
 
     private async Task InitializeAsync()
     {
+        // Real default size (matching state.layout's own 'wide' default in
+        // index.html), clamped to whatever this monitor's working area can
+        // actually show — see ApplyWindowSize's own comment for why that
+        // clamp matters even for the very first launch, not just later
+        // resizes from Settings.
+        ApplyWindowSize(1920, 1080);
+
         LogApiEvent($"STARTUP exe=[{Application.ExecutablePath}] baseDir=[{AppContext.BaseDirectory}] " +
             $"localAppData=[{Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)}] " +
             $"resolvedSaveFilePath=[{Path.GetFullPath(SaveFilePath)}] pid={Environment.ProcessId} " +
@@ -130,10 +138,20 @@ public class MainForm : Form
         try
         {
             var json = e.TryGetWebMessageAsString();
+            // TEMPORARY diagnostic (see api_save_log.txt's own established
+            // convention above) -- logs every web message unconditionally,
+            // not just on exception, while the "Settings -> Window size
+            // does nothing" report gets root-caused for real. Remove once
+            // confirmed fixed.
+            LogApiEvent($"WebMessageReceived raw=[{json}]");
             if (string.IsNullOrEmpty(json)) return;
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
-            if (!root.TryGetProperty("type", out var typeProp) || typeProp.GetString() != "setWindowSize") return;
+            if (!root.TryGetProperty("type", out var typeProp) || typeProp.GetString() != "setWindowSize")
+            {
+                LogApiEvent($"WebMessageReceived: ignored, type={(root.TryGetProperty("type", out var tp) ? tp.GetString() : "(missing)")}");
+                return;
+            }
 
             int width = root.TryGetProperty("width", out var w) && w.TryGetInt32(out var wi) ? wi : 0;
             int height = root.TryGetProperty("height", out var h) && h.TryGetInt32(out var hi) ? hi : 0;
@@ -142,6 +160,7 @@ public class MainForm : Form
                 var layout = root.TryGetProperty("layout", out var l) ? l.GetString() : null;
                 (width, height) = layout == "compact" ? (1440, 700) : (1920, 1080);
             }
+            LogApiEvent($"WebMessageReceived: applying setWindowSize {width}x{height}");
             ApplyWindowSize(width, height);
         }
         catch (Exception ex)
@@ -154,18 +173,88 @@ public class MainForm : Form
     // (the outer window bounds, title bar and borders included) — setting
     // those instead would leave the page's #app canvas (sized to fill the
     // window exactly, in either layout, with no page scroll) a few dozen
-    // pixels short in each dimension. Re-centers on the current screen after
-    // resizing (same as the constructor's StartPosition.CenterScreen gives
-    // the very first launch) so shrinking or growing the window can't leave
-    // it partially off-screen.
+    // pixels short in each dimension.
     private void ApplyWindowSize(int width, int height)
     {
         if (width <= 0 || height <= 0) return;
-        ClientSize = new Size(width, height);
         var workingArea = Screen.FromControl(this).WorkingArea;
+
+        // Measure this window's REAL non-client overhead (title bar, plus
+        // the invisible DWM resize border Windows 10+ adds around a
+        // WS_THICKFRAME window) at the current monitor/DPI/theme, by
+        // actually setting ClientSize and reading back the resulting outer
+        // Width/Height — far more reliable across Windows versions than
+        // hand-computing it from SystemInformation constants, which don't
+        // include that invisible border on their own.
+        //
+        // Deliberately measured from a small-ish, safely-on-screen PROBE
+        // size, not from the real target size directly — measuring from
+        // the target is circular and wrong whenever the target is itself
+        // big enough for some OTHER constraint to ALSO be silently
+        // clamping the outer window at that exact same moment: Width/
+        // Height come back already clamped, but ClientSize keeps reporting
+        // whatever was just requested (not what actually resulted), so the
+        // Width/Height-minus-ClientSize math understates or corrupts the
+        // real chrome. Confirmed happening TWICE, from two different
+        // constraints: (1) a 1920x1080 request on a 1920x1080/1032-
+        // working-area display came back with a NEGATIVE chrome height,
+        // because the screen's working area was itself the clamp; (2) an
+        // earlier, smaller 400x300 probe — meant to dodge problem (1) —
+        // hit MinimumSize (1000x650) instead: WinForms floored the OUTER
+        // window to 1000x650, but ClientSize still read back "400x300",
+        // so chrome came out as 600x350, wildly inflated. The probe size
+        // below is chosen to clear BOTH floors: bigger than MinimumSize in
+        // both dimensions, but still comfortably smaller than any real
+        // monitor's working area.
+        ClientSize = new Size(1100, 750);
+        int chromeWidth = Width - ClientSize.Width;
+        int chromeHeight = Height - ClientSize.Height;
+        // TEMPORARY diagnostic — unconditional, not just on a detected
+        // clamp, while this whole calculation gets root-caused for real.
+        LogApiEvent($"ApplyWindowSize DEBUG: requested={width}x{height} workingArea={workingArea.Width}x{workingArea.Height}"
+            + $" probeClientSize={ClientSize.Width}x{ClientSize.Height} probeOuter={Width}x{Height}"
+            + $" chrome={chromeWidth}x{chromeHeight} thisBounds={Bounds} thisLocation={Location}");
+
+        // A window whose OUTER size exceeds the screen's working area (its
+        // bounds minus the taskbar) gets silently clamped by Windows itself
+        // — discovered by actually launching this app on a real 1920x1080
+        // display: requesting a 1920x1080 CLIENT area needs an outer height
+        // of roughly 1080+chromeHeight, taller than the ~1032px working
+        // area that exact resolution left after its taskbar, so the OS
+        // shrank the outer window to fit and the page's own #app canvas (a
+        // fixed-size box with no fluid fallback, by design — two discrete
+        // breakpoints, not responsive scaling) ended up a few dozen pixels
+        // taller than the real visible client area, reachable only by
+        // scrolling — exactly what "no page scroll, everything fits the
+        // window" rules out. Pre-clamp here so the requested CLIENT area
+        // itself never asks for more room than the screen can actually
+        // give it, rather than finding out after the OS already clamped
+        // the outer window out from under us.
+        int clampedWidth = Math.Min(width, Math.Max(1, workingArea.Width - chromeWidth));
+        int clampedHeight = Math.Min(height, Math.Max(1, workingArea.Height - chromeHeight));
+        if (clampedWidth != width || clampedHeight != height)
+        {
+            LogApiEvent($"ApplyWindowSize: requested {width}x{height} clamped to {clampedWidth}x{clampedHeight} "
+                + $"(workingArea={workingArea.Width}x{workingArea.Height}, chrome={chromeWidth}x{chromeHeight})");
+        }
+        // Always the real target now (probed at a throwaway 400x300 above,
+        // never actually left there) — clamped or not.
+        ClientSize = new Size(clampedWidth, clampedHeight);
+        LogApiEvent($"ApplyWindowSize DEBUG: after final ClientSize set -> outer={Width}x{Height} clientNow={ClientSize.Width}x{ClientSize.Height}");
+
+        // Re-centers on the current screen after resizing (same as the
+        // constructor's StartPosition.CenterScreen gives the very first
+        // launch) so shrinking or growing the window can't leave it
+        // partially off-screen.
         Location = new Point(
             workingArea.X + Math.Max(0, (workingArea.Width - Width) / 2),
             workingArea.Y + Math.Max(0, (workingArea.Height - Height) / 2));
+
+        // index.html's own fitCanvasToViewport() (called every render(),
+        // which already fires on its own ~1s tick) self-corrects --wk-w/
+        // --wk-h to window.innerWidth/innerHeight whenever they're smaller
+        // than the nominal layout size, so it picks up a clamp like the one
+        // above on its own within a second with no push needed from here.
     }
 
     // localStorage is scoped per-origin, which includes the port — so the

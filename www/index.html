@@ -6632,12 +6632,38 @@ function restoreFocus(saved){
   }
 }
 
+// #app is a fixed-size canvas per state.layout (--wk-w/--wk-h: 1920x1080
+// wide, 1440x700 compact) -- but the ACTUAL room available can be less than
+// that nominal size: a real desktop window's title bar + a monitor's own
+// taskbar can together eat into the same vertical budget the page wants to
+// fill (confirmed by actually launching the desktop shell on a real
+// 1920x1080 display, where the OS was already clamping the outer window to
+// fit on screen before this existed, leaving #app taller than the real
+// client area and the bottom of the page reachable only by scrolling --
+// exactly what "no page scroll, everything fits the window" rules out).
+// Rather than trust the native host to always hand back the exact nominal
+// size, self-correct here on every render (boot, every ~1s tick, and right
+// after setLayout()) to whatever's ACTUALLY available -- this also means a
+// plain browser tab sized smaller than 1920x1080/1440x700 (e.g. this file
+// opened directly for testing, or MainForm.cs's own working-area clamp)
+// degrades to "canvas shrinks a bit" instead of "canvas overflows the
+// window," with zero native-side cooperation required.
+function fitCanvasToViewport(){
+  const nominal = LAYOUT_SIZES[state.layout] || LAYOUT_SIZES.wide;
+  const w = Math.min(nominal.w, window.innerWidth);
+  const h = Math.min(nominal.h, window.innerHeight);
+  const root = document.documentElement.style;
+  root.setProperty('--wk-w', w+'px');
+  root.setProperty('--wk-h', h+'px');
+}
+
 function render(){
   checkAchievements();
   // Mirrors state.layout onto <body> so the compact --wk-* token block in
   // <style> (body[data-layout="compact"]) applies — see setLayout().
   if(state.layout==='compact') document.body.dataset.layout = 'compact';
   else delete document.body.dataset.layout;
+  fitCanvasToViewport();
   const debugPanel = document.getElementById('debugPanel');
   if(debugPanel) debugPanel.innerHTML = renderDebug();
   const modalRoot = document.getElementById('modalRoot');
