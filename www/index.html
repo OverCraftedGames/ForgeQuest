@@ -6066,6 +6066,13 @@ function renderAchievementsModal(){
 // AND starts the spin in one action — this modal is purely the animation +
 // result readout for that single real trigger.
 function renderWheelModal(){
+  // WHEEL_COOLDOWN_MS is a real 1-hour cooldown, not the design handoff's
+  // mocked-up 90 seconds -- compute the blurb from the real constant so it
+  // can never drift out of sync with the actual balance value again.
+  const cooldownMin = Math.round(WHEEL_COOLDOWN_MS/60000);
+  const cooldownLabel = cooldownMin % 60 === 0
+    ? (cooldownMin/60 === 1 ? 'hour' : (cooldownMin/60)+' hours')
+    : cooldownMin+' minutes';
   let cum = 0;
   const wedges = WHEEL_SEGMENTS.map(seg=>{ const start=cum; cum+=seg.pct; return {seg, start, end:cum}; });
   const gradientStops = wedges.map(w=>w.seg.color+' '+w.start+'% '+w.end+'%').join(', ');
@@ -6082,7 +6089,7 @@ function renderWheelModal(){
       <div class="wkModalHead">
         <div>
           <div class="wkModalTitle">Spin the wheel</div>
-          <div class="wkModalBlurb">One free spin every ninety seconds.</div>
+          <div class="wkModalBlurb">One free spin every ${cooldownLabel}.</div>
         </div>
         <button type="button" class="wkBtn wkModalClose" onclick="closeWheel()">Close</button>
       </div>
