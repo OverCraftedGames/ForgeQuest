@@ -69,9 +69,13 @@
     0%{transform:translateX(-100%);}
     100%{transform:translateX(360%);}
   }
-  #layout{max-width:1590px;margin:0 auto;padding:24px;display:flex;gap:20px;align-items:flex-start;}
   #debugPanel{width:170px;flex-shrink:0;position:sticky;top:24px;max-height:calc(100vh - 48px);overflow-y:auto;}
   #debugPanel:not(:empty){background:#f5ead8;border:1.5px solid var(--border);border-radius:var(--radius-md);padding:10px;box-shadow:var(--shadow-md);}
+  /* Empty in production (DEBUG_BUILD is false, so renderDebug() returns '')
+     -- must take NO flex space at all, or its explicit width throws off
+     #layout's justify-content:center against #app (the new full-viewport
+     Workshop canvas), pushing #app off-center and clipping its right edge. */
+  #debugPanel:empty{display:none;}
   /* #app is now the always-on Workshop root: one fixed-size, position:relative
      canvas (sized via --wk-w/--wk-h, wide/1920x1080 values only this pass —
      see the --wk-* token block up in :root) that every Workshop-screen piece
