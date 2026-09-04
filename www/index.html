@@ -2919,6 +2919,13 @@ function closeAchievements(){ state.achievementsOpen = false; render(); }
 function toggleProfile(){
   state.profileOpen = !state.profileOpen;
   if(state.profileOpen){ state.mineOpen=false; state.catalogOpen=false; state.hammerInventoryOpen=false; state.swordInventoryModalOpen=false; state.tutorialOpen=false; state.settingsOpen=false; state.achievementsOpen=false; state.wheelOpen=false; state.newSwordPopup=null; state.dailyRewardPopup=null; state.expeditionsOpen=false; closeExtraModals(); }
+  // This only ever opens from the Friends header button (see
+  // renderProfileModal()'s doc comment), and closeExtraModals() above just
+  // closed friendsOpen along with everything else — without this, closing
+  // Profile drops you on the plain Workshop instead of back on Friends,
+  // unlike leaveVisit()'s same "return to caller" pattern for the friend-
+  // visit modal.
+  else { state.friendsOpen = true; }
   render();
 }
 function closeProfile(){ state.profileOpen = false; render(); }
@@ -2941,7 +2948,7 @@ function openTutorial(){
   closeExtraModals();
   render();
 }
-function closeTutorial(){ state.tutorialOpen = false; render(); }
+function closeTutorial(){ state.tutorialOpen = false; state.tutorialStep = 0; render(); }
 function tutorialNext(){ state.tutorialStep = Math.min(TUTORIAL_STEPS.length-1, state.tutorialStep+1); render(); }
 function tutorialBack(){ state.tutorialStep = Math.max(0, state.tutorialStep-1); render(); }
 function tutorialGoto(i){ state.tutorialStep = Math.max(0, Math.min(TUTORIAL_STEPS.length-1, i)); render(); }
@@ -4789,25 +4796,6 @@ function debugAddHammer(id, amount){
 async function debugResetGame(){ isResetting = true; await clearSave(); location.reload(); }
 
 /* ---------- RENDER ---------- */
-
-function renderStatbar(){
-  const repPct = Math.round(state.exp/expToNext(state.level)*100);
-  const ready = wheelReady();
-  const remain = wheelRemainingMs();
-  return `
-  <div class="statbar">
-    <div class="stat">Business level <b>${state.level}</b></div>
-    <div class="stat" style="flex:1;min-width:180px;">Reputation
-      <div class="barwrap"><div class="barfill" style="width:${repPct}%;"></div>
-      <div class="barlabel">${state.exp}/${expToNext(state.level)}</div></div>
-    </div>
-    <div class="stat"><span style="color:var(--gold);"><img src="${GOLD_ICON}" alt="Gold" style="width:16px;height:16px;object-fit:contain;vertical-align:-3px;"> ${state.gold.toLocaleString()}</span></div>
-    <div class="stat"><span style="color:var(--mark);">&#128142; ${state.marks.toLocaleString()}</span></div>
-    <button onclick="openWheel()" ${ready?'':'disabled'} title="Spin once an hour for gold, ore, or one of 5 special hammers">
-      &#127920; ${ready? 'Spin the wheel' : formatMs(remain)}
-    </button>
-  </div>`;
-}
 
 function setShopSubTab(t){ state.shopSubTab = t; render(); }
 
