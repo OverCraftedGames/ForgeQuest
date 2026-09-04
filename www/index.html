@@ -22,12 +22,12 @@
     --font-heading:'Caprasimo',Georgia,serif; --font-body:'Figtree','Trebuchet MS',system-ui,sans-serif;
     --radius-lg:26px; --radius-md:16px; --radius-sm:10px;
     --shadow-md:0 3px 10px rgba(46,43,37,.12); --shadow-lg:0 12px 32px rgba(46,43,37,.16);
-    /* ---- Workshop hub layout tokens (wide/1920x1080 values only — Phase 7
-       will redefine these under body[data-layout="compact"] for 1440x700
-       without touching any rule that reads them; every absolutely-positioned
-       Workshop-screen piece below reads var(--wk-*) instead of a literal
-       number so that later pass is a values-only swap). Source: the design
-       handoff's LAYOUTS.wide table. */
+    /* ---- Workshop hub layout tokens (wide/1920x1080 defaults). Redefined
+       under body[data-layout="compact"] below for 1440x700 without touching
+       any rule that reads them; every absolutely-positioned Workshop-screen
+       piece reads var(--wk-*) instead of a literal number, so that compact
+       block is a values-only swap. Source: the design handoff's LAYOUTS
+       table (wide/compact). */
     --wk-w:1920px; --wk-h:1080px; --wk-pad:36px; --wk-hud-top:32px; --wk-rep-w:460px;
     --wk-icon-size:52px; --wk-title-pad:14px 56px; --wk-title-size:34px; --wk-kick-size:11px;
     --wk-sign-top:138px; --wk-sign-w:230px; --wk-sign-h:83px; --wk-sign-gap:9px; --wk-handle-h:22px;
@@ -39,6 +39,32 @@
     --wk-tray-icon:52px; --wk-tray-min-w:104px;
     --wk-hud-num:24px; --wk-hud-icon:34px; --wk-gold-pad:10px 20px 10px 12px;
   }
+  /* ---- Compact (1440x700) layout — Phase 7 values-only swap ----
+     Redefines every --wk-* token above using the design handoff's
+     LAYOUTS.compact column (Settings → Window size → 1440 × 700). Nothing
+     else in this stylesheet needs to change: every Workshop-screen piece
+     and the .wkModalCard shell already read var(--wk-*), so this selector
+     alone re-layouts the whole app. A few things aren't pure CSS values and
+     get their own state.layout==='compact' branch in JS instead — shelf
+     rows shown (renderShelfPanel), tray Blades tab count (renderTrayBlades),
+     and the Catalog card height (renderCatalogOverview). state.layout is
+     mirrored onto body[data-layout] by render() — see setLayout(). */
+  body[data-layout="compact"]{
+    --wk-w:1440px; --wk-h:700px; --wk-pad:22px; --wk-hud-top:18px; --wk-rep-w:330px;
+    --wk-icon-size:36px; --wk-title-pad:9px 34px; --wk-title-size:24px; --wk-kick-size:9px;
+    --wk-sign-top:96px; --wk-sign-w:150px; --wk-sign-h:46px; --wk-sign-gap:4px; --wk-handle-h:11px;
+    --wk-case-left:86px; --wk-case-top:132px; --wk-case-w:168px;
+    --wk-table-top:92px; --wk-table-w:352px; --wk-tab-h:28px; --wk-cell-gap:9px; --wk-table-pad:17px;
+    --wk-cell-radius:14px; --wk-plus-size:22px;
+    --wk-shelf-w:230px; --wk-shelf-bottom:178px; --wk-shelf-rows:2; --wk-shelf-pad:12px 14px; --wk-shelf-title:17px;
+    --wk-tray-h:166px; --wk-tray-tab-w:158px; --wk-tray-title:19px; --wk-tray-item-pad:8px 12px;
+    --wk-tray-icon:38px; --wk-tray-min-w:84px;
+    --wk-hud-num:18px; --wk-hud-icon:26px; --wk-gold-pad:7px 15px 7px 9px;
+  }
+  /* .wkModalBackdrop's padding (50px wide) isn't a --wk-* token — it was never
+     tokenized in Phase 1, so it needs its own literal override here (24px
+     compact, per the handoff's overlayWrapStyle). */
+  body[data-layout="compact"] .wkModalBackdrop{padding:24px;}
   *{box-sizing:border-box;}
   body{
     margin:0; font-family:var(--font-body); color:var(--text); min-height:100vh;
@@ -332,13 +358,22 @@
   /* Settings modal (ui-overhaul) — restyled onto the shared .wkModalCard
      shell (default w860, one row per setting per §2n). Real settings
      (mute, music/effects volume, friend code, save, two-step reset) are
-     unchanged — styling only. Deliberately NO "Window size" row this pass —
-     see renderSettingsModal()'s comment. */
+     unchanged — styling only. "Window size" row (new mechanic, wired to
+     state.layout via setLayout()) added this pass — see
+     renderSettingsModal()'s comment. */
   .wkSettingsRow{display:flex;align-items:center;justify-content:space-between;gap:16px;background:rgba(245,234,216,.6);border:2px solid var(--border);border-radius:18px;padding:16px 20px;}
   .wkSettingsRow.danger{background:rgba(168,64,47,.07);border-color:rgba(168,64,47,.4);}
   .wkSettingsRowTitle{font:700 16px/1.2 var(--font-body);}
   .wkSettingsRowTitle.danger{color:var(--danger);}
   .wkSettingsRowSub{font-size:13px;color:var(--muted);}
+  /* Window size option buttons (§2n) — same selected-state convention as
+     .wkCatMatBtn.active/.wkExpOption.selected elsewhere in this file
+     (accent border + accent-100 background on the active choice). */
+  .wkLayoutOpt{display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:11px 18px;border-radius:16px;cursor:pointer;text-align:left;border:2px solid var(--border);background:transparent;color:var(--text);}
+  .wkLayoutOpt .name{font:700 15px/1 var(--font-body);}
+  .wkLayoutOpt.active{border-color:var(--accent);background:var(--accent-100);}
+  .wkLayoutOpt.active .name{color:var(--gold);}
+  .wkLayoutOpt .note{font:400 11px/1.3 var(--font-body);color:var(--muted);}
 
   /* Tutorial / "How to play" modal (ui-overhaul) — restyled onto the shared
      .wkModalCard shell (default w860, two-column art-left/copy-right layout
@@ -2148,6 +2183,12 @@ function startFriendBackendLoop(){
 const state = {
   level:1, exp:0, gold:600, marks:0,
   tab:'workshop',
+  // Window/layout preference — 'wide' (1920x1080, the default) or 'compact'
+  // (1440x700, laptop/streaming). Persisted like state.display (see
+  // serializeState()/loadGame()); render() mirrors it onto
+  // body[data-layout] so the compact --wk-* token block in <style> applies.
+  // See setLayout() for the native-window-resize bridge to MainForm.cs.
+  layout:'wide',
   toast:null,
   ores:{copper:3, bronze:0, iron:0, steel:0, silver:0, gold:0, platinum:0},
   catalog:{}, fusionCatalog:new Set(),
@@ -2360,6 +2401,7 @@ function serializeState(){
     // case is empty. Persisted like inventory itself; existing saves with
     // no display field at all safely default to null on load below.
     display: state.display,
+    layout: state.layout,
     stations: state.stations,
     orders: state.orders,
     guaranteedOrder: state.guaranteedOrder,
@@ -2650,6 +2692,10 @@ async function loadGame(){
     state.fusionCatalog = new Set(data.fusionCatalog||[]);
     if(data.inventory) state.inventory = data.inventory;
     state.display = data.display ?? null;
+    // Real, meaningful player preference (not a transient UI-open flag) —
+    // round-trips like state.display above. Existing saves with no layout
+    // field at all safely default to 'wide' (the pre-compact-pass behavior).
+    state.layout = data.layout==='compact' ? 'compact' : 'wide';
     if(data.stations){
       state.stations = data.stations;
       // Backfill smithHitBy for saves from before it existed: a craft whose old
@@ -2761,6 +2807,32 @@ function gainRep(amount){
 function setToast(msg){ state.toast = msg; setTimeout(()=>{ if(state.toast===msg){ state.toast=null; render(); } }, 3500); }
 
 function toggleMuted(){ state.muted = !state.muted; musicPlayerA.muted = state.muted; musicPlayerB.muted = state.muted; setToast(state.muted?'Sound muted.':'Sound unmuted.'); render(); }
+
+// Settings → Window size (ui-overhaul, new mechanic). Sets the persisted
+// state.layout ('wide'|'compact'), re-renders (which mirrors it onto
+// body[data-layout] — see render()'s comment — so the compact --wk-* token
+// block in <style> applies immediately), and toasts a confirmation. Also
+// posts a message to the native desktop host, when running inside the real
+// WebView2 shell, so MainForm.cs can actually resize the window to match —
+// window.chrome.webview only exists there, never in a plain browser tab
+// used for local testing, hence the guard (see MainForm.cs's
+// WebMessageReceived handler for the other half of this bridge).
+function setLayout(mode){
+  const layout = mode==='compact' ? 'compact' : 'wide';
+  state.layout = layout;
+  const info = LAYOUT_SIZES[layout];
+  setToast('Window size set to ' + info.label + '.');
+  render();
+  try{
+    if(window.chrome && window.chrome.webview){
+      window.chrome.webview.postMessage(JSON.stringify({type:'setWindowSize', layout, width:info.w, height:info.h}));
+    }
+  }catch(e){ /* no native host attached (plain browser) — nothing to do */ }
+}
+const LAYOUT_SIZES = {
+  wide:{label:'1920 × 1080', note:'Full HD — the default desktop window.', w:1920, h:1080},
+  compact:{label:'1440 × 700', note:'Short window — laptop and streaming layouts.', w:1440, h:700},
+};
 function toggleSettings(){
   state.settingsOpen = !state.settingsOpen;
   state.settingsResetConfirm = false; // never leave the confirm step open across a close/reopen
@@ -4867,8 +4939,9 @@ function renderTrayHammers(){
 // never needs its own scrollbar, with "All N swords" (on the shelf panel)
 // as the place the full, uncapped list actually lives (renderInventoryModal).
 const TRAY_BLADES_CAP = 7;
+const TRAY_BLADES_CAP_COMPACT = 5;
 function renderTrayBlades(){
-  const shown = state.inventory.slice().reverse().slice(0, TRAY_BLADES_CAP);
+  const shown = state.inventory.slice().reverse().slice(0, state.layout==='compact' ? TRAY_BLADES_CAP_COMPACT : TRAY_BLADES_CAP);
   const items = shown.map(s=>`<div class="wkTrayItem" title="${s.material} &middot; Rank ${s.rank} &middot; AP ${s.ap} / DP ${s.dp}${s.el?' &middot; '+s.el:''}" onclick="toggleOrdersOpen()">
       <img src="${swordArt(s)}" alt="${s.name}">
       <div class="name">${s.name}</div>
@@ -5374,8 +5447,9 @@ function renderExpeditionResultPopup(){
 // The catalog is a split-panel overlay: a left rail of materials (+ a Fusion
 // entry) and a right detail pane showing the selected entry's discovered/
 // undiscovered styles. Restyled onto the shared .wkModalCard shell (w1180,
-// a FIXED 940px card height regardless of which material is selected — see
-// renderCatalogOverview()'s comment for why — per the design handoff's §2e);
+// a FIXED height regardless of which material is selected — 940px wide,
+// 640px compact — see renderCatalogOverview()'s comment for why — per the
+// design handoff's §2e);
 // real catalog data + material-expertise progress are untouched, styling
 // only. The old prev/next pager between entries is dropped — the rail
 // already gives direct one-click navigation to any material, and the design
@@ -5498,7 +5572,7 @@ function renderCatalogOverview(){
   totalDiscovered += state.fusionCatalog.size;
 
   return `<div class="wkModalBackdrop" onclick="closeCatalogOverview()">
-    <div class="wkModalCard" style="width:1180px;height:940px;flex-shrink:0;" onclick="event.stopPropagation()">
+    <div class="wkModalCard" style="width:1180px;height:${state.layout==='compact'?640:940}px;flex-shrink:0;" onclick="event.stopPropagation()">
       <div class="wkModalHead">
         <div>
           <div class="wkModalTitle">Catalog</div>
@@ -5928,16 +6002,22 @@ function renderProfileModal(){
 }
 
 // Restyled onto the shared .wkModalCard shell (default w860, one row per
-// setting per the design handoff's §2n). Deliberately NO "Window size" row
-// this pass — the handoff's two-size layout picker is a later phase (native
-// window-resize bridge + the compact breakpoint don't exist yet), so a
-// picker here would be a dead control. All real settings (mute, music/
-// effects volume, friend code, save, two-step reset) plus the Name row
-// (avatar/title — not in the handoff at all, kept here per the same
-// judgment call other undocumented systems got) are unchanged — styling
-// only.
+// setting per the design handoff's §2n). Now includes the "Window size" row
+// (§2n / layoutOptions) added this pass — see setLayout() for the state +
+// native-resize bridge. All other real settings (mute, music/effects
+// volume, friend code, save, two-step reset) plus the Name row (avatar/
+// title — not in the handoff at all, kept here per the same judgment call
+// other undocumented systems got) are unchanged — styling only.
 function renderSettingsModal(){
   const savedLabel = state.lastSaveAt ? 'Saved '+Math.max(0,Math.round((Date.now()-state.lastSaveAt)/1000))+'s ago' : 'Not saved yet';
+  const layoutOptions = Object.keys(LAYOUT_SIZES).map(k=>{
+    const o = LAYOUT_SIZES[k];
+    const active = state.layout===k;
+    return `<button type="button" class="wkLayoutOpt ${active?'active':''}" onclick="setLayout('${k}')">
+      <span class="name">${o.label}</span>
+      <span class="note">${o.note}</span>
+    </button>`;
+  }).join('');
   return `<div class="wkModalBackdrop" onclick="toggleSettings()">
     <div class="wkModalCard" style="width:860px;" onclick="event.stopPropagation()">
       <div class="wkModalHead">
@@ -5948,6 +6028,13 @@ function renderSettingsModal(){
         <button type="button" class="wkBtn wkModalClose" onclick="toggleSettings()">Close</button>
       </div>
       <div class="wkModalBody">
+        <div class="wkSettingsRow">
+          <div>
+            <div class="wkSettingsRowTitle">Window size</div>
+            <div class="wkSettingsRowSub">The whole workshop lays out to fit the size you pick.</div>
+          </div>
+          <span class="row" style="gap:10px;flex-shrink:0;">${layoutOptions}</span>
+        </div>
         <div class="wkSettingsRow">
           <div>
             <div class="wkSettingsRowTitle">Name</div>
@@ -6419,9 +6506,10 @@ function renderDisplayModal(){
 // is still reachable via "All N swords" → the Blades modal (renderInventoryModal
 // below), same as before.
 const SHELF_ROWS_CAP = 4;
+const SHELF_ROWS_CAP_COMPACT = 2;
 function renderShelfPanel(){
   const all = state.inventory.slice().reverse();
-  const shown = all.slice(0, SHELF_ROWS_CAP);
+  const shown = all.slice(0, state.layout==='compact' ? SHELF_ROWS_CAP_COMPACT : SHELF_ROWS_CAP);
   const rows = shown.map(s=>`<div class="wkShelfRow">
       <img src="${swordArt(s)}" alt="${s.name}">
       <div style="min-width:0;">
@@ -6546,6 +6634,10 @@ function restoreFocus(saved){
 
 function render(){
   checkAchievements();
+  // Mirrors state.layout onto <body> so the compact --wk-* token block in
+  // <style> (body[data-layout="compact"]) applies — see setLayout().
+  if(state.layout==='compact') document.body.dataset.layout = 'compact';
+  else delete document.body.dataset.layout;
   const debugPanel = document.getElementById('debugPanel');
   if(debugPanel) debugPanel.innerHTML = renderDebug();
   const modalRoot = document.getElementById('modalRoot');
