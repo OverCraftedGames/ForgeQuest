@@ -699,19 +699,28 @@
      correctly spans the full canvas. */
   .radialBackdrop{position:absolute;inset:0;z-index:90;}
   .hammerRadial{position:relative;place-self:center;width:0;height:0;z-index:95;}
+  /* A plain circle with just an icon (no visible label, name/status only in
+     the hover tooltip) read as illegible at a glance, per direct feedback --
+     grown into a small rounded-rect column (icon + a short name label)
+     instead of a perfect circle, still radial-positioned, still no
+     backdrop/dimming (see renderHammerRadial()'s own comment for why a
+     centered modal was rejected in the first place). */
   .hammerWedge{
-    position:absolute;left:50%;top:50%;width:40px;height:40px;padding:6px;border-radius:999px;
+    position:absolute;left:50%;top:50%;width:58px;height:60px;padding:6px 4px;border-radius:14px;
     background:#f5ead8;border:2px solid var(--accent);box-shadow:var(--shadow-md);
-    display:flex;align-items:center;justify-content:center;cursor:pointer;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer;
   }
-  .hammerWedge img{width:100%;height:100%;object-fit:contain;}
+  .hammerWedge img{width:30px;height:30px;object-fit:contain;}
+  .hammerWedgeLabel{font:600 10px/1 var(--font-body);color:var(--text);white-space:nowrap;}
   .hammerWedge:hover{border-color:var(--accent-600);}
   .hammerWedge.disabled{opacity:.35;filter:grayscale(1);cursor:not-allowed;border-color:var(--border);}
   /* Compact's table is ~63% as wide with smaller cells to match (same
      reasoning as the .readyActions/.cookProgress compact trims elsewhere) --
-     scaled the wedge radius/size down by roughly that ratio so the radial
-     doesn't fan out past the edges of a much smaller grid. */
-  body[data-layout="compact"] .hammerWedge{width:28px;height:28px;padding:4px;}
+     scaled the wedge size down by roughly that ratio so the radial doesn't
+     fan out past the edges of a much smaller grid. */
+  body[data-layout="compact"] .hammerWedge{width:42px;height:44px;padding:4px 3px;gap:2px;border-radius:10px;}
+  body[data-layout="compact"] .hammerWedge img{width:20px;height:20px;}
+  body[data-layout="compact"] .hammerWedgeLabel{font-size:8px;}
   .progresswrap{height:8px;background:rgba(32,30,29,.14);border:none;border-radius:999px;overflow:hidden;margin-top:5px;}
   .progressfill{height:100%;background:var(--accent);transition:width .3s;}
   /* Expeditions overview (ui-overhaul) — restyled onto the shared
@@ -5069,7 +5078,13 @@ function updateCookingProgressUI(){
 // returned the backdrop, not the wedge underneath it — every real click
 // was silently closing the radial instead of registering a hit.
 function renderHammerRadial(stationIdx, c, spanStyle){
-  const radius = state.layout==='compact' ? 40 : 58; // compact's table is ~63% as wide — see the matching .hammerWedge comment
+  // Wedges grew a bit (see .hammerWedge) to fit a short name label under
+  // the icon — direct feedback that icon-only wedges relying purely on a
+  // hover tooltip weren't legible enough, but a full centered modal (this
+  // radial's own predecessor, see the comment above) was too heavy for a
+  // five-button choice. Radius grown to match so the now-taller/wider
+  // wedges still clear each other and the ready card around the circle.
+  const radius = state.layout==='compact' ? 48 : 70;
   const n = POST_COOK_HAMMERS.length;
   const wedges = POST_COOK_HAMMERS.map((h, i)=>{
     const angle = (i/n) * 2*Math.PI - Math.PI/2;
@@ -5085,10 +5100,15 @@ function renderHammerRadial(stationIdx, c, spanStyle){
     if(cooldownRemainMs>0) title += ' — ready again in '+formatMs(cooldownRemainMs);
     else if(alreadyUsed) title += ' — already used on this craft';
     else if(!owned) title += " — you don't own this hammer, buy one in the Shop";
+    // "Smith hammer" -> "Smith" -- the tooltip (title, above) still carries
+    // the full name + status, this is just the always-visible label under
+    // the icon, kept short so it doesn't wrap inside a small wedge.
+    const shortName = h.name.replace(/ hammer$/i, '');
     const action = enabled ? `hammerHit(${stationIdx},'${c.id}','${h.id}')` : `setToast('${title.replace(/'/g,"\\'")}')`;
     return `<button type="button" class="hammerWedge ${enabled?'':'disabled'}" title="${title}"
       style="transform:translate(calc(-50% + ${x}px),calc(-50% + ${y}px));" onclick="${action}">
       <img src="${HAMMER_ICON[h.id]}" alt="${h.name}">
+      <span class="hammerWedgeLabel">${shortName}</span>
     </button>`;
   }).join('');
   return `<div class="hammerRadial" style="${spanStyle}">${wedges}</div>`;
