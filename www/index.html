@@ -214,8 +214,23 @@
     color:#fdf6ec;background:rgba(32,30,29,.55);border-radius:999px;display:inline-flex;align-items:center;
   }
 
+  /* Display case + shelf used to each be independently position:absolute
+     (case anchored from the top, shelf anchored from the BOTTOM via
+     --wk-shelf-bottom) -- fine as long as neither ever grew, but a shelf
+     with several swords (up to SHELF_ROWS_CAP) is genuinely taller than a
+     near-empty one, and a bottom-anchored box gets TALLER upward as it
+     grows, not downward -- confirmed overlapping the case above it on a
+     real 1920x1080 run with 4+ shelf swords, something a quick browser
+     check with only 1-2 test swords never turned up. Wrapping both in one
+     normal-flow flex column (.wkLeftStack) makes that impossible by
+     construction: whatever height either one actually renders at, the
+     next sibling simply starts `gap` below it, never on top of it. Each
+     child keeps its own distinct width/indent (the case is narrower and
+     sits further right, like a picture hung above a wider dresser) via
+     margin-left instead of the position:absolute left it had before. */
+  .wkLeftStack{position:absolute;top:var(--wk-case-top);left:0;z-index:4;display:flex;flex-direction:column;align-items:flex-start;gap:24px;}
   .wkDisplayCase{
-    position:absolute;left:var(--wk-case-left);top:var(--wk-case-top);width:var(--wk-case-w);z-index:4;
+    margin-left:var(--wk-case-left);width:var(--wk-case-w);
     display:flex;flex-direction:column;align-items:center;gap:0;cursor:pointer;
   }
   .wkCaseHook{width:50%;height:0;border-top:3px solid rgba(32,30,29,.5);border-radius:999px;}
@@ -238,16 +253,28 @@
   .wkCaseMeta{font:400 11px/1.3 var(--font-body);text-align:center;color:var(--muted);}
 
   .wkShelf{
-    position:absolute;left:var(--wk-pad);bottom:var(--wk-shelf-bottom);width:var(--wk-shelf-w);z-index:4;
+    margin-left:var(--wk-pad);width:var(--wk-shelf-w);
     background:var(--panel);border:2px solid var(--border);border-radius:24px;padding:var(--wk-shelf-pad);box-shadow:var(--shadow-lg);
   }
+  body[data-layout="compact"] .wkLeftStack{gap:8px;}
   .wkShelfTitle{font:400 var(--wk-shelf-title)/1 var(--font-heading);color:var(--text);margin-bottom:10px;}
   .wkShelfRows{display:flex;flex-direction:column;gap:9px;}
+  /* Compact-only trims (title/row-gap/button margin+height below) -- the
+     case-then-shelf stack (see .wkLeftStack) now can never overlap the case
+     above it by construction, but a 2-row compact shelf's own fixed chrome
+     (padding/title/button) was still tall enough to reach into the tray
+     below it at the bottom of the screen -- confirmed by measurement (548px
+     vs. the tray's own 534px top), not assumed. Trimmed enough to clear it
+     with a few px to spare, same principle as every other --wk-* compact
+     value, just not worth a dedicated token for a handful of one-off px. */
+  body[data-layout="compact"] .wkShelfTitle{margin-bottom:6px;}
+  body[data-layout="compact"] .wkShelfRows{gap:6px;}
   .wkShelfRow{display:flex;align-items:center;gap:12px;}
   .wkShelfRow img{width:38px;height:38px;object-fit:contain;}
   .wkShelfName{font:600 14px/1.2 var(--font-body);}
   .wkShelfMeta{font-size:11px;color:var(--muted);}
   .wkShelfAllBtn{width:100%;margin-top:14px;height:36px;font:600 12px/1 var(--font-body);}
+  body[data-layout="compact"] .wkShelfAllBtn{margin-top:8px;height:32px;}
 
   .wkTray{
     position:absolute;left:0;right:0;bottom:0;height:var(--wk-tray-h);z-index:6;
@@ -605,6 +632,21 @@
   }
   .cookProgress .progresswrap{width:100%;}
   .cookProgress button{height:34px;padding:0 13px;font-size:12px;}
+  /* Neither this nor .readyActions' own button rule below ever scaled down
+     for compact -- harmless while the table itself was still full-size, but
+     the compact table is ~63% as wide (352px vs 560px) with smaller cells
+     to match, so a still-full-size button pair reads as oversized/cramped
+     against them (reported directly against the real 1440x700 build).
+     Scaled by roughly that same ~0.63-0.7 ratio. Scoped under .wkTableWrap
+     (the real in-scene table only) rather than a bare body[data-layout] +
+     .cookProgress/.readyActions selector, deliberately -- .friendStationCard
+     reuses these same two classes for a friend's read-only table, which has
+     its own independent proportional transform:scale() sizing entirely
+     unrelated to the PLAYER's own state.layout (see fitFriendVisitContent()
+     and .friendVisitScaleContent's comment) — letting a compact-layout CSS
+     override ALSO apply there would double-shrink it. */
+  body[data-layout="compact"] .wkTableWrap .cookProgress{padding:9px;gap:6px;}
+  body[data-layout="compact"] .wkTableWrap .cookProgress button{height:26px;padding:0 9px;font-size:10px;}
   .oreChipRow{display:flex;gap:3px;flex-wrap:wrap;justify-content:center;}
   .oreChipBadge{
     display:inline-flex;align-items:center;justify-content:center;padding:2px;border-radius:999px;
@@ -648,6 +690,11 @@
   }
   .readyActions .row{justify-content:center;}
   .readyActions button{height:38px;padding:0 16px;font-size:13px;}
+  /* Scoped under .wkTableWrap only — see the matching .cookProgress comment
+     above for why (.friendStationCard reuses .readyActions too, with its
+     own unrelated scale-transform sizing that this must not double up on). */
+  body[data-layout="compact"] .wkTableWrap .readyActions{padding:8px;gap:6px;}
+  body[data-layout="compact"] .wkTableWrap .readyActions button{height:27px;padding:0 10px;font-size:11px;}
   .hammerBtn{background:var(--green);border-color:var(--green);color:#fdf6ec;font-weight:700;}
   .hammerBtn:hover{filter:brightness(1.1);background:var(--green);color:#fdf6ec;}
   /* The radial menu is a fixed-pixel-radius popover, not sized off the grid, so its
@@ -6686,8 +6733,7 @@ function render(){
     ${renderIconRow()}
     ${renderSignCol()}
     ${renderTableWrap()}
-    ${renderDisplayCase()}
-    ${renderShelfPanel()}
+    <div class="wkLeftStack">${renderDisplayCase()}${renderShelfPanel()}</div>
     ${renderTray()}
     ${renderToast()}
   `;
