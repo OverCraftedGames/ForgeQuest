@@ -3751,6 +3751,29 @@ function closeHammerRadial(){
   state.openHammerRadial = null;
   render();
 }
+// Click-outside-to-close for the radial, as a single document-level
+// listener rather than a dedicated full-screen backdrop div -- a backdrop
+// was tried first and genuinely didn't work: it has to sit ABOVE the wedges
+// in paint order to catch outside clicks at all, but .wkTableWrap (the
+// table wrapper the wedges render inside) has `position:absolute` + its own
+// z-index, making it a stacking context of its own -- so the wedges nested
+// inside it can never paint above a backdrop rendered as a later,
+// higher-z-index SIBLING of the whole table, regardless of the wedges' own
+// (locally-scoped) z-index. Confirmed with document.elementFromPoint() at a
+// wedge's own on-screen center: it returned the backdrop, not the wedge
+// underneath it -- every real click was silently closing the radial
+// instead of registering a hit. A document-level listener has no stacking
+// to fight: it doesn't need to be "above" anything, it just inspects
+// e.target after the wedge's own onclick (if any) has already run. Skips
+// closing when the click landed on the radial itself (a wedge, mid-drag,
+// etc.) or on any "Hammer" button (toggleHammerRadial already handles
+// open/close/switch-craft for those); registered once here at parse time,
+// not inside render(), so it never gets duplicated across re-renders.
+document.addEventListener('click', function(e){
+  if(!state.openHammerRadial) return;
+  if(e.target.closest('.hammerRadial') || e.target.closest('.hammerBtn')) return;
+  closeHammerRadial();
+});
 
 // sourceId identifies who's swinging the smith hammer — 'player' for the owner's
 // own clicks (the default, so every existing call site needs no change), or a
@@ -5033,11 +5056,18 @@ function updateCookingProgressUI(){
 // enable/disable/cooldown logic (owned count, already-used-this-craft,
 // smith cooldown remaining) as the modal it replaces — only the
 // presentation reverted, not the hammer set. Click-outside-to-close is a
-// SEPARATE top-level `.radialBackdrop` div (see render()'s app.innerHTML
-// assembly), not nested here — .wkTableWrap (this function's own caller's
-// ancestor) has its own `transform` for centering, which would otherwise
-// trap a nested `position:fixed` backdrop inside the table's own box
-// instead of covering the whole screen.
+// single document-level listener (see closeHammerRadialOnOutsideClick,
+// registered once near boot), NOT a dedicated full-screen backdrop div —
+// a backdrop div was tried first and genuinely didn't work: it has to sit
+// ABOVE the wedges in paint order to catch outside clicks at all, but
+// .wkTableWrap (this function's own caller's ancestor) has `position:absolute`
+// + its own z-index, which makes it a stacking context of its own — so the
+// wedges nested inside it can never paint above a backdrop rendered as a
+// later, higher-z-index SIBLING of the whole table, regardless of the
+// wedges' own (locally-scoped) z-index. Confirmed with
+// document.elementFromPoint() at a wedge's own on-screen center: it
+// returned the backdrop, not the wedge underneath it — every real click
+// was silently closing the radial instead of registering a hit.
 function renderHammerRadial(stationIdx, c, spanStyle){
   const radius = state.layout==='compact' ? 40 : 58; // compact's table is ~63% as wide — see the matching .hammerWedge comment
   const n = POST_COOK_HAMMERS.length;
@@ -6810,7 +6840,6 @@ function render(){
     ${renderTableWrap()}
     <div class="wkLeftStack">${renderDisplayCase()}${renderShelfPanel()}</div>
     ${renderTray()}
-    ${state.openHammerRadial ? '<div class="radialBackdrop" onclick="closeHammerRadial()"></div>' : ''}
     ${renderToast()}
   `;
   restoreFocus(saved);
