@@ -355,17 +355,6 @@
   .wkBladeRow{display:flex;align-items:center;gap:12px;background:rgba(245,234,216,.6);border:2px solid var(--border);border-radius:18px;padding:12px;}
   .wkBladeRow img{width:46px;height:46px;object-fit:contain;flex-shrink:0;}
 
-  .wkHammerGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
-  .wkHammerCard{
-    display:flex;flex-direction:column;align-items:center;gap:6px;padding:16px 12px;border-radius:18px;cursor:pointer;
-    background:rgba(245,234,216,.6);border:2px solid var(--border);text-align:center;
-  }
-  .wkHammerCard img{width:52px;height:72px;object-fit:contain;}
-  .wkHammerCard.disabled{opacity:.4;cursor:not-allowed;filter:grayscale(.6);}
-  .wkHammerCard .name{font:700 15px/1 var(--font-body);}
-  .wkHammerCard .count{font:600 13px/1 var(--font-body);color:var(--gold);}
-  .wkHammerCard .desc{font-size:11px;color:var(--muted);line-height:1.4;}
-
   /* Achievements modal (ui-overhaul) — restyled onto the shared
      .wkModalCard shell (w1020, 2-col card grid per §2i). Real ACHIEVEMENTS
      data + state.unlockedAchievements are unchanged — styling only. Unlike
@@ -699,8 +688,16 @@
   .hammerBtn:hover{filter:brightness(1.1);background:var(--green);color:#fdf6ec;}
   /* The radial menu is a fixed-pixel-radius popover, not sized off the grid, so its
      wedges land correctly regardless of grid tier — same reasoning as the Fire
-     button's grid placement above. */
-  .radialBackdrop{position:fixed;inset:0;z-index:90;}
+     button's grid placement above.
+     .radialBackdrop is position:absolute (NOT fixed) because it's rendered
+     as a top-level sibling inside #app's own innerHTML (see render()), not
+     nested inside .wkTableWrap -- that has its own `transform` for centering,
+     and a `transform` on an ancestor establishes a new containing block for
+     any `position:fixed` descendant, which would trap a nested fixed
+     backdrop inside the table's own box instead of covering the whole
+     screen. #app itself carries no transform, so absolute+inset:0 here
+     correctly spans the full canvas. */
+  .radialBackdrop{position:absolute;inset:0;z-index:90;}
   .hammerRadial{position:relative;place-self:center;width:0;height:0;z-index:95;}
   .hammerWedge{
     position:absolute;left:50%;top:50%;width:40px;height:40px;padding:6px;border-radius:999px;
@@ -710,6 +707,11 @@
   .hammerWedge img{width:100%;height:100%;object-fit:contain;}
   .hammerWedge:hover{border-color:var(--accent-600);}
   .hammerWedge.disabled{opacity:.35;filter:grayscale(1);cursor:not-allowed;border-color:var(--border);}
+  /* Compact's table is ~63% as wide with smaller cells to match (same
+     reasoning as the .readyActions/.cookProgress compact trims elsewhere) --
+     scaled the wedge radius/size down by roughly that ratio so the radial
+     doesn't fan out past the edges of a much smaller grid. */
+  body[data-layout="compact"] .hammerWedge{width:28px;height:28px;padding:4px;}
   .progresswrap{height:8px;background:rgba(32,30,29,.14);border:none;border-radius:999px;overflow:hidden;margin-top:5px;}
   .progressfill{height:100%;background:var(--accent);transition:width .3s;}
   /* Expeditions overview (ui-overhaul) — restyled onto the shared
@@ -3734,9 +3736,11 @@ function toggleHammerRadial(stationIdx, craftId){
   if(open && open.stationIdx===stationIdx && open.craftId===craftId){
     state.openHammerRadial = null;
   } else {
-    // Now a modal (see renderHammerPickerModal) rather than a wedge menu
-    // anchored to the ready card — same mutual-exclusion convention as
-    // every other modal-opening toggle here.
+    // Back to a wedge menu anchored to the ready card (see
+    // renderHammerRadial) rather than a modal — still closes every other
+    // modal on open, same mutual-exclusion convention as before, even
+    // though in practice the ready card that opens this is only reachable
+    // when nothing else is already covering the workshop screen.
     closeCoreModals();
     state.shopOpen=false; state.ordersOpen=false; state.friendsOpen=false; state.displayOpen=false;
     state.openHammerRadial = {stationIdx, craftId};
@@ -5017,50 +5021,47 @@ function updateCookingProgressUI(){
 
 // Wedges arranged on a circle around a fixed pixel radius via CSS transform, not
 // percentage-of-container math — so they land correctly regardless of grid size.
-// Replaces the old circular wedge menu with a modal grid of option cards
-// (5 choices — Glass excluded, see POST_COOK_HAMMERS — matching the design
-// handoff's hammer-picker popout) — same enable/disable/cooldown logic as
-// the wedge version it replaces (owned count, already-used-this-craft, smith
-// cooldown remaining), and the same hammerHit()/state.openHammerRadial
-// underneath (see toggleHammerRadial()); only the presentation changed.
-function renderHammerPickerModal(){
-  const open = state.openHammerRadial;
-  if(!open) return '';
-  const st = state.stations[open.stationIdx];
-  const c = st && st.craftings.find(x=>x.id===open.craftId);
-  if(!c){ state.openHammerRadial = null; return ''; }
-  const cards = POST_COOK_HAMMERS.map(h=>{
+// A modal grid of option cards briefly replaced this (matching the design
+// handoff's hammer-picker popout) but read as "too much of a new window"
+// for a five-button choice, per direct feedback — reverted to the
+// pre-overhaul game's own radial construction: a zero-size, place-self:center
+// grid item sharing the ready card's own row/column span (see the
+// `${style}` passed in from the ready-craft markup below), each wedge
+// positioned via a fixed-pixel-radius transform so it fans out from that
+// shared center regardless of grid size. Still POST_COOK_HAMMERS (5 —
+// Glass excluded, it's used from the cooking overlay instead) and the same
+// enable/disable/cooldown logic (owned count, already-used-this-craft,
+// smith cooldown remaining) as the modal it replaces — only the
+// presentation reverted, not the hammer set. Click-outside-to-close is a
+// SEPARATE top-level `.radialBackdrop` div (see render()'s app.innerHTML
+// assembly), not nested here — .wkTableWrap (this function's own caller's
+// ancestor) has its own `transform` for centering, which would otherwise
+// trap a nested `position:fixed` backdrop inside the table's own box
+// instead of covering the whole screen.
+function renderHammerRadial(stationIdx, c, spanStyle){
+  const radius = state.layout==='compact' ? 40 : 58; // compact's table is ~63% as wide — see the matching .hammerWedge comment
+  const n = POST_COOK_HAMMERS.length;
+  const wedges = POST_COOK_HAMMERS.map((h, i)=>{
+    const angle = (i/n) * 2*Math.PI - Math.PI/2;
+    const x = Math.round(Math.cos(angle)*radius);
+    const y = Math.round(Math.sin(angle)*radius);
     const cooldownRemainMs = h.id==='smith' && c.lastPlayerSmithHitAt!=null
       ? Math.max(0, SMITH_HAMMER_COOLDOWN_MS-(Date.now()-c.lastPlayerSmithHitAt))
       : 0;
     const alreadyUsed = h.id==='smith' ? false : c.hammersUsed.includes(h.id);
     const owned = hammerCanUse(h.id);
     const enabled = owned && !alreadyUsed && cooldownRemainMs<=0;
-    let desc = h.desc;
-    if(cooldownRemainMs>0) desc = 'Ready again in '+formatMs(cooldownRemainMs)+'.';
-    else if(alreadyUsed) desc = 'Already used on this craft.';
-    else if(!owned) desc = "You don't own this hammer — buy one in the Shop.";
-    const countLabel = h.id==='smith' ? '&infin;' : '&times;'+(state.hammerInventory[h.id]||0);
-    const action = enabled ? `hammerHit(${open.stationIdx},'${c.id}','${h.id}')` : `setToast('${desc.replace(/'/g,"\\'")}')`;
-    return `<div class="wkHammerCard ${enabled?'':'disabled'}" title="${h.name}" onclick="${action}">
+    let title = h.name;
+    if(cooldownRemainMs>0) title += ' — ready again in '+formatMs(cooldownRemainMs);
+    else if(alreadyUsed) title += ' — already used on this craft';
+    else if(!owned) title += " — you don't own this hammer, buy one in the Shop";
+    const action = enabled ? `hammerHit(${stationIdx},'${c.id}','${h.id}')` : `setToast('${title.replace(/'/g,"\\'")}')`;
+    return `<button type="button" class="hammerWedge ${enabled?'':'disabled'}" title="${title}"
+      style="transform:translate(calc(-50% + ${x}px),calc(-50% + ${y}px));" onclick="${action}">
       <img src="${HAMMER_ICON[h.id]}" alt="${h.name}">
-      <div class="name">${h.name}</div>
-      <div class="count">${countLabel}</div>
-      <div class="desc">${desc}</div>
-    </div>`;
+    </button>`;
   }).join('');
-  return `<div class="wkModalBackdrop" onclick="closeHammerRadial()">
-    <div class="wkModalCard" style="width:760px;" onclick="event.stopPropagation()">
-      <div class="wkModalHead">
-        <div>
-          <div class="wkModalTitle">Choose a hammer</div>
-          <div class="wkModalBlurb">Each hammer (besides Smith) only works once per craft.</div>
-        </div>
-        <button type="button" class="wkBtn wkModalClose" onclick="closeHammerRadial()">Close</button>
-      </div>
-      <div class="wkHammerGrid">${cards}</div>
-    </div>
-  </div>`;
+  return `<div class="hammerRadial" style="${spanStyle}">${wedges}</div>`;
 }
 
 // A plain horizontal box list, not a radial — just a always-reachable
@@ -5205,6 +5206,7 @@ function renderStationGrid(stationIdx, st){
   const readyHtml = ready.map(c=>{
     const {style} = spanOf(c);
     const cellDivs = c.cells.map(p=>`<div class="gridCell ready-craft" style="grid-row:${p.r+1};grid-column:${p.c+1};"></div>`).join('');
+    const radialOpen = state.openHammerRadial && state.openHammerRadial.stationIdx===stationIdx && state.openHammerRadial.craftId===c.id;
     return `<div class="readyPair" style="display:contents;">
       ${cellDivs}
       <div class="readyActions" style="${style}">
@@ -5215,6 +5217,7 @@ function renderStationGrid(stationIdx, st){
           <button type="button" class="primary" onclick="collectSword(${stationIdx},'${c.id}')">Collect</button>
         </div>
       </div>
+      ${radialOpen? renderHammerRadial(stationIdx, c, style) : ''}
     </div>`;
   }).join('');
 
@@ -6782,7 +6785,11 @@ function render(){
   const debugPanel = document.getElementById('debugPanel');
   if(debugPanel) debugPanel.innerHTML = renderDebug();
   const modalRoot = document.getElementById('modalRoot');
-  if(modalRoot) modalRoot.innerHTML = state.usernamePromptOpen ? renderUsernamePromptModal() : (state.friendHitPopup ? renderFriendHitPopup() : (state.newSwordPopup ? renderNewSwordPopup() : (state.expeditionResultQueue.length ? renderExpeditionResultPopup() : (state.dailyRewardPopup ? renderDailyRewardPopup() : (state.tutorialOpen ? renderTutorialModal() : (state.openHammerRadial ? renderHammerPickerModal() : (state.displayOpen ? renderDisplayModal() : (state.shopOpen ? renderShopModal() : (state.ordersOpen ? renderOrdersModal() : (state.friendsOpen ? renderFriendsModal() : (state.mineOpen ? renderMineOverview() : (state.catalogOpen ? renderCatalogOverview() : (state.settingsOpen ? renderSettingsModal() : (state.swordInventoryModalOpen ? renderInventoryModal() : (state.achievementsOpen ? renderAchievementsModal() : (state.profileOpen ? renderProfileModal() : (state.wheelOpen ? renderWheelModal() : (state.expeditionsOpen ? renderExpeditionOverview() : (state.visitingFriendId ? renderFriendVisitModal() : '')))))))))))))))))));
+  // state.openHammerRadial deliberately NOT in this chain — it's the
+  // inline .hammerRadial anchored on the ready craft itself (see
+  // renderHammerRadial(), rendered as part of app.innerHTML's own table
+  // markup below), not a #modalRoot popout.
+  if(modalRoot) modalRoot.innerHTML = state.usernamePromptOpen ? renderUsernamePromptModal() : (state.friendHitPopup ? renderFriendHitPopup() : (state.newSwordPopup ? renderNewSwordPopup() : (state.expeditionResultQueue.length ? renderExpeditionResultPopup() : (state.dailyRewardPopup ? renderDailyRewardPopup() : (state.tutorialOpen ? renderTutorialModal() : (state.displayOpen ? renderDisplayModal() : (state.shopOpen ? renderShopModal() : (state.ordersOpen ? renderOrdersModal() : (state.friendsOpen ? renderFriendsModal() : (state.mineOpen ? renderMineOverview() : (state.catalogOpen ? renderCatalogOverview() : (state.settingsOpen ? renderSettingsModal() : (state.swordInventoryModalOpen ? renderInventoryModal() : (state.achievementsOpen ? renderAchievementsModal() : (state.profileOpen ? renderProfileModal() : (state.wheelOpen ? renderWheelModal() : (state.expeditionsOpen ? renderExpeditionOverview() : (state.visitingFriendId ? renderFriendVisitModal() : ''))))))))))))))))));
   // Must run AFTER the innerHTML assignment above (needs the real DOM node
   // to measure) — see fitFriendVisitContent()'s own comment for why this
   // scales instead of scrolling.
@@ -6803,6 +6810,7 @@ function render(){
     ${renderTableWrap()}
     <div class="wkLeftStack">${renderDisplayCase()}${renderShelfPanel()}</div>
     ${renderTray()}
+    ${state.openHammerRadial ? '<div class="radialBackdrop" onclick="closeHammerRadial()"></div>' : ''}
     ${renderToast()}
   `;
   restoreFocus(saved);
