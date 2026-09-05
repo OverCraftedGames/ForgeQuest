@@ -74,22 +74,41 @@
   body[data-layout="compact"] .wkModalBackdrop{padding:24px;}
   *{box-sizing:border-box;}
   /* Same image as #app (below), no wash -- #app is a FIXED 1920x1080/
-     1440x700 canvas, centered by #layout, so on any window/monitor wider
-     than that (an ultrawide display, or simply not maximized to exactly
-     that size) there's real body backdrop visible either side of it.
-     Removing the wash here too (not just from #app) previously left that
-     margin a flat tan (--e0d2b8) instead of the image continuing outward
-     -- confirmed directly against a real ultrawide screenshot: the image
-     used to visibly stretch/continue into that space (because body used
-     to carry the same washed image #app now carries on its own), and
-     went flat the moment body's own copy was dropped down to a bare
-     color. Same image, same cover/center, just no gradient overlay --
-     matches #app's own now-unwashed copy, just doesn't need to be a
-     pixel-identical crop since it's only ever visible in a margin, never
-     side-by-side with #app's own copy. */
+     1440x700 canvas, centered horizontally + anchored to the TOP by #layout
+     (align-items:flex-start), so on any window/monitor wider or taller than
+     that (an ultrawide display, or simply not maximized to exactly that
+     size) there's real body backdrop visible around it. Removing the wash
+     here too (not just from #app) previously left that margin a flat tan
+     (--e0d2b8) instead of the image continuing outward -- confirmed
+     directly against a real ultrawide screenshot: the image used to
+     visibly stretch/continue into that space (because body used to carry
+     the same washed image #app now carries on its own), and went flat the
+     moment body's own copy was dropped down to a bare color.
+     Restoring a plain `background-size:cover` here (matching #app's own
+     rule) turned out to be its OWN bug, caught from a real screenshot: a
+     bare `cover` on body scales the image to fill the whole VIEWPORT (a
+     different, wider/shorter box than #app's own fixed canvas), which is a
+     different crop/scale of the same photo than #app's own cover-on-#app
+     render -- right at the boundary between them, two differently-scaled
+     copies of the same room read as a distorted, duplicated seam rather
+     than one continuous scene. Fixed by matching #app's exact scale
+     instead of independently cover-fitting the viewport: --wk-bg-tile-w/h
+     (computed in JS, see fitBodyBackgroundTile()) hold the literal pixel
+     size #app's own background-size:cover renders the image at for the
+     CURRENT --wk-w/--wk-h box, so body paints the identical crop/scale,
+     positioned the same way #app is (center horizontally, top vertically)
+     -- background-repeat stays at its CSS default (repeat), so the
+     identically-scaled tile continues edge-to-edge outward into the
+     margin instead of stopping dead after one copy. */
   body{
     margin:0; font-family:var(--font-body); color:var(--text); min-height:100vh;
-    background-image:url("backgrounds/body-workshop.jpg");background-size:cover;background-position:center;
+    background-image:url("backgrounds/body-workshop.jpg");
+    /* Pixel fallbacks match the wide layout's own cover-fit size, in case
+       this paints before fitBodyBackgroundTile()'s first run ever sets the
+       real custom properties (it shouldn't in practice -- boot() calls
+       render(), which calls fitCanvasToViewport(), before #bootScreen ever
+       fades out -- but a static fallback here is free insurance). */
+    background-size:var(--wk-bg-tile-w, 1920px) var(--wk-bg-tile-h, 1080px);background-position:center top;
     background-color:#e0d2b8;
   }
   /* Boot screen (see the HTML comment next to #bootScreen for why this is
@@ -526,7 +545,13 @@
   .gridHammerBtn:hover{filter:brightness(1.15);transform:scale(1.05);}
   .gridHammerBtn.active{filter:brightness(1.25) drop-shadow(0 0 10px rgba(198,113,57,.55));}
   .gridHammerWrap .hammerInvPopout{left:auto;right:0;}
-  .invRow{display:flex;flex-direction:column;gap:4px;padding:10px 12px;border-radius:var(--radius-sm);background:rgba(245,234,216,.6);border:1.5px solid var(--border);margin-bottom:8px;}
+  /* .invRowWrap holds the sprite + .invRow itself side by side -- .invRow
+     stays exactly as it was (a column stack of name/meta/scrap-or-confirm),
+     just no longer the outermost element, so none of its own children or
+     the scrap-confirm swap logic needed to change. */
+  .invRowWrap{display:flex;align-items:flex-start;gap:12px;margin-bottom:8px;}
+  .invRowWrap img{width:44px;height:44px;object-fit:contain;flex-shrink:0;}
+  .invRow{display:flex;flex-direction:column;gap:4px;padding:10px 12px;border-radius:var(--radius-sm);background:rgba(245,234,216,.6);border:1.5px solid var(--border);flex:1;min-width:0;}
   .invRow button{align-self:flex-start;margin-top:2px;}
   /* --panel used to be a near-invisible dark tint (rgba(32,30,29,.045)) — fine for
      panels whose actual text sits in its own card/row (.invRow, .orderCard, etc.,
@@ -6686,7 +6711,9 @@ function renderToast(){
 
 function renderSwordRow(s){
   const confirming = state.scrapConfirmId===s.id;
-  return `<div class="invRow">
+  return `<div class="invRowWrap">
+    <img src="${swordArt(s)}" alt="${s.name}">
+    <div class="invRow">
       <div class="rank${s.rank}" style="font-weight:600;font-size:12.5px;">${s.name}${s.saleBonus?' <span class="badge" style="border-color:var(--gold);color:var(--gold);">+sale</span>':''}</div>
       <div class="small">${s.material} &middot; <span class="badge">${s.rank}</span> &middot; AP ${s.ap} / DP ${s.dp}${s.el?' &middot; '+s.el:''}</div>
       ${confirming ? `
@@ -6696,7 +6723,8 @@ function renderSwordRow(s){
         <button style="background:#a33;color:#fff;border-color:#a33;" onclick="scrapSword('${s.id}')">Confirm scrap</button>
       </div>
       ` : `<button onclick="requestScrapSword('${s.id}')">Scrap</button>`}
-    </div>`;
+    </div>
+  </div>`;
 }
 // The Blades modal — opened from the shelf panel's "All N swords" button
 // (see renderShelfPanel() above), restyled onto the shared .wkModalCard shell
@@ -6845,6 +6873,9 @@ function fitSignGapToViewport(canvasH){
   document.body.style.setProperty('--wk-handle-h', Math.round(nominalHandleH * scale)+'px');
 }
 
+// Native pixel size of backgrounds/body-workshop.jpg — needed to compute
+// body's background-tile size below (see fitBodyBackgroundTile()).
+const BODY_BG_NATIVE = {w:1376, h:768};
 function fitCanvasToViewport(){
   const nominal = LAYOUT_SIZES[state.layout] || LAYOUT_SIZES.wide;
   const w = Math.min(nominal.w, window.innerWidth);
@@ -6852,6 +6883,30 @@ function fitCanvasToViewport(){
   document.body.style.setProperty('--wk-w', w+'px');
   document.body.style.setProperty('--wk-h', h+'px');
   fitSignGapToViewport(h);
+  fitBodyBackgroundTile(w, h);
+}
+// Keeps body's own copy of the background art (visible in the margin on any
+// window/monitor wider or taller than the fixed #app canvas -- see the CSS
+// comment above body{} for why it has one at all) at the EXACT SAME scale
+// and crop #app's own background-size:cover renders at, instead of body
+// independently cover-fitting the whole viewport (a different, wider/taller
+// box than #app's own, so it produces a DIFFERENT crop/scale of the same
+// photo) -- confirmed via a real ultrawide screenshot that the two mismatched
+// crops sitting right next to each other reads as the image being distorted/
+// duplicated at the seam, not a clean continuation. CSS alone can't express
+// "cover, but sized to a fixed box, not to whatever box you're painted on" --
+// so this replicates the cover-fit math by hand (scale = the LARGER of the
+// two ratios, same as the CSS spec's own cover algorithm) and writes the
+// result as an explicit pixel background-size, with body's own
+// background-repeat left at its default (repeat) so the identically-scaled
+// tile continues edge-to-edge into the margin instead of just stretching or
+// going blank past a single copy.
+function fitBodyBackgroundTile(w, h){
+  const scale = Math.max(w / BODY_BG_NATIVE.w, h / BODY_BG_NATIVE.h);
+  const tileW = BODY_BG_NATIVE.w * scale;
+  const tileH = BODY_BG_NATIVE.h * scale;
+  document.body.style.setProperty('--wk-bg-tile-w', tileW+'px');
+  document.body.style.setProperty('--wk-bg-tile-h', tileH+'px');
 }
 
 function render(){
