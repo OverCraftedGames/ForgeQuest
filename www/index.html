@@ -74,41 +74,36 @@
   body[data-layout="compact"] .wkModalBackdrop{padding:24px;}
   *{box-sizing:border-box;}
   /* Same image as #app (below), no wash -- #app is a FIXED 1920x1080/
-     1440x700 canvas, centered horizontally + anchored to the TOP by #layout
-     (align-items:flex-start), so on any window/monitor wider or taller than
-     that (an ultrawide display, or simply not maximized to exactly that
-     size) there's real body backdrop visible around it. Removing the wash
-     here too (not just from #app) previously left that margin a flat tan
-     (--e0d2b8) instead of the image continuing outward -- confirmed
-     directly against a real ultrawide screenshot: the image used to
-     visibly stretch/continue into that space (because body used to carry
-     the same washed image #app now carries on its own), and went flat the
-     moment body's own copy was dropped down to a bare color.
-     Restoring a plain `background-size:cover` here (matching #app's own
-     rule) turned out to be its OWN bug, caught from a real screenshot: a
-     bare `cover` on body scales the image to fill the whole VIEWPORT (a
-     different, wider/shorter box than #app's own fixed canvas), which is a
-     different crop/scale of the same photo than #app's own cover-on-#app
-     render -- right at the boundary between them, two differently-scaled
-     copies of the same room read as a distorted, duplicated seam rather
-     than one continuous scene. Fixed by matching #app's exact scale
-     instead of independently cover-fitting the viewport: --wk-bg-tile-w/h
-     (computed in JS, see fitBodyBackgroundTile()) hold the literal pixel
-     size #app's own background-size:cover renders the image at for the
-     CURRENT --wk-w/--wk-h box, so body paints the identical crop/scale,
-     positioned the same way #app is (center horizontally, top vertically)
-     -- background-repeat stays at its CSS default (repeat), so the
-     identically-scaled tile continues edge-to-edge outward into the
-     margin instead of stopping dead after one copy. */
+     1440x700 canvas, centered by #layout, so on any window/monitor wider or
+     taller than that (an ultrawide display, or simply not maximized to
+     exactly that size) there's real body backdrop visible around it.
+     Two earlier attempts at this both had real, screenshot-confirmed bugs:
+     a bare `background-size:cover` on body (matching #app's own rule
+     literally) cover-fits the whole VIEWPORT -- a different, wider/shorter
+     box than #app's own fixed canvas -- producing a DIFFERENT crop/scale of
+     the same photo, which read as a distorted seam at the boundary. Then,
+     computing #app's exact scale in JS and repeating it at that scale
+     (an earlier revision of this comment/rule) fixed the scale mismatch
+     but, being a real repeating tile of a one-of-a-kind illustrated scene
+     (not a seamless texture), read as literal duplicated content the
+     moment the margin was wide enough to show a second copy of something
+     recognizable (a doorway, a window) -- confirmed directly from the
+     user's own screenshot, still visible after that fix.
+     Fixed properly with `background-attachment:fixed`, on BOTH this rule
+     and #app's (below) -- per the CSS spec, fixed attachment sizes/positions
+     the image relative to the VIEWPORT itself, not the element painting it,
+     so two elements with the identical image/size/position values under
+     `fixed` attachment render the EXACT SAME pixels at every screen
+     coordinate, regardless of how large or where each element's own box is.
+     #app (opaque, on top) simply masks its own portion of that one shared
+     render; body shows the rest continuing outward with zero JS needed to
+     compute anything, and zero possibility of a scale mismatch or a visible
+     repeat seam -- it's genuinely one continuous image, not two independent
+     renders of it. */
   body{
     margin:0; font-family:var(--font-body); color:var(--text); min-height:100vh;
     background-image:url("backgrounds/body-workshop.jpg");
-    /* Pixel fallbacks match the wide layout's own cover-fit size, in case
-       this paints before fitBodyBackgroundTile()'s first run ever sets the
-       real custom properties (it shouldn't in practice -- boot() calls
-       render(), which calls fitCanvasToViewport(), before #bootScreen ever
-       fades out -- but a static fallback here is free insurance). */
-    background-size:var(--wk-bg-tile-w, 1920px) var(--wk-bg-tile-h, 1080px);background-position:center top;
+    background-size:cover;background-position:center;background-attachment:fixed;
     background-color:#e0d2b8;
   }
   /* Boot screen (see the HTML comment next to #bootScreen for why this is
@@ -154,7 +149,12 @@
     position:relative;flex-shrink:0;overflow:hidden;
     width:var(--wk-w);height:var(--wk-h);
     border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);
-    background-image:url("backgrounds/body-workshop.jpg");background-size:cover;background-position:center;
+    /* background-attachment:fixed here must match body's own rule above
+       EXACTLY (same image/size/position/attachment) -- see body{}'s comment
+       for why: fixed attachment makes both elements paint the identical
+       viewport-relative image, so #app's own crop and body's margin are
+       genuinely one continuous picture, not two independently-scaled ones. */
+    background-image:url("backgrounds/body-workshop.jpg");background-size:cover;background-position:center;background-attachment:fixed;
     background-color:#e0d2b8;
   }
   h1{font:400 30px/1.1 var(--font-heading);text-align:left;margin:0;letter-spacing:0;color:var(--text);}
@@ -1286,10 +1286,16 @@ const FUSION = {};
 // added without matching art doesn't break the popup.
 const SWORD_SPRITE_FALLBACK = 'swords/fusion/01_Bronzefang.png';
 // Small shared lookup for the shelf/tray/display-case/Blades-modal/Display-
-// picker markup below (ui-overhaul) — same fallback rule renderNewSwordPopup()
-// already used inline (SWORD_SPRITE[sword.name] || SWORD_SPRITE_FALLBACK),
-// just named so it isn't repeated at every new call site.
-function swordArt(s){ return SWORD_SPRITE[s.name] || SWORD_SPRITE_FALLBACK; }
+// picker markup below (ui-overhaul) — the nameplate-free variant (see
+// SWORD_SPRITE_NOTITLE, defined below alongside SWORD_SPRITE), since every
+// call site here is a small icon sitting right next to its own name as
+// separate text, making the baked-in nameplate pure redundant clutter --
+// unlike the New Sword popup / Catalog grid, which deliberately keep the
+// titled art as a one-off "reveal" moment (those call SWORD_SPRITE directly,
+// not through here). Direct feedback after an initial pass used the titled
+// SWORD_SPRITE/swordArt() here instead -- removed that helper entirely once
+// every one of its call sites moved to this one, confirmed via grep.
+function swordArtNotitle(s){ return SWORD_SPRITE_NOTITLE[s.name] || SWORD_SPRITE_FALLBACK_NOTITLE; }
 const SWORD_SPRITE = {
   'Copper Sword':'swords/copper/01_Copper_Sword.png', 'The Fang':'swords/copper/02_The_Fang.png',
   'Crimson Sword':'swords/copper/03_Crimson_Sword.png', 'Sawblade':'swords/copper/04_Sawblade.png',
@@ -5078,7 +5084,7 @@ const TRAY_BLADES_CAP_COMPACT = 5;
 function renderTrayBlades(){
   const shown = state.inventory.slice().reverse().slice(0, state.layout==='compact' ? TRAY_BLADES_CAP_COMPACT : TRAY_BLADES_CAP);
   const items = shown.map(s=>`<div class="wkTrayItem" title="${s.material} &middot; Rank ${s.rank} &middot; AP ${s.ap} / DP ${s.dp}${s.el?' &middot; '+s.el:''}" onclick="toggleOrdersOpen()">
-      <img src="${swordArt(s)}" alt="${s.name}">
+      <img src="${swordArtNotitle(s)}" alt="${s.name}">
       <div class="name">${s.name}</div>
       <div class="count">Rank ${s.rank}</div>
     </div>`).join('');
@@ -6616,7 +6622,7 @@ function renderDisplayCase(){
   const name = s ? s.name : 'Empty case';
   const meta = s ? (s.material+' &middot; Rank '+s.rank+' &middot; +'+repBonusPct(s)+'% reputation') : 'Mount your fanciest blade';
   const body = s
-    ? `<div class="wkCaseArtWrap"><img src="${swordArt(s)}" alt="${s.name}"></div>`
+    ? `<div class="wkCaseArtWrap"><img src="${swordArtNotitle(s)}" alt="${s.name}"></div>`
     : `<div class="wkCaseEmpty"><span>+</span></div>`;
   return `<div class="wkDisplayCase" title="Your display case" onclick="toggleDisplayOverview()">
     <div class="wkCaseHook"></div>
@@ -6631,7 +6637,7 @@ function renderDisplayCase(){
 function renderDisplayModal(){
   const candidates = state.inventory.slice().sort((a,b)=>repBonusPct(b)-repBonusPct(a));
   const rows = candidates.map(s=>`<div class="wkDisplayRow" onclick="mountDisplay('${s.id}')">
-      <img src="${swordArt(s)}" alt="${s.name}">
+      <img src="${swordArtNotitle(s)}" alt="${s.name}">
       <div style="min-width:0;flex:1;">
         <div class="rank${s.rank}" style="font:600 15px/1.2 Figtree,sans-serif;">${s.name}</div>
         <div class="small">${s.material} &middot; Rank ${s.rank} &middot; AP ${s.ap} / DP ${s.dp}${s.el?' &middot; '+s.el:''}</div>
@@ -6666,7 +6672,7 @@ function renderShelfPanel(){
   const all = state.inventory.slice().reverse();
   const shown = all.slice(0, state.layout==='compact' ? SHELF_ROWS_CAP_COMPACT : SHELF_ROWS_CAP);
   const rows = shown.map(s=>`<div class="wkShelfRow">
-      <img src="${swordArt(s)}" alt="${s.name}">
+      <img src="${swordArtNotitle(s)}" alt="${s.name}">
       <div style="min-width:0;">
         <div class="wkShelfName rank${s.rank}">${s.name}</div>
         <div class="wkShelfMeta">${s.material} &middot; Rank ${s.rank}</div>
@@ -6724,7 +6730,7 @@ function renderSwordRow(s){
       </div>
       ` : `<button onclick="requestScrapSword('${s.id}')">Scrap</button>`}
     </div>
-    <img src="${swordArt(s)}" alt="${s.name}">
+    <img src="${swordArtNotitle(s)}" alt="${s.name}">
   </div>`;
 }
 // The Blades modal — opened from the shelf panel's "All N swords" button
@@ -6874,9 +6880,6 @@ function fitSignGapToViewport(canvasH){
   document.body.style.setProperty('--wk-handle-h', Math.round(nominalHandleH * scale)+'px');
 }
 
-// Native pixel size of backgrounds/body-workshop.jpg — needed to compute
-// body's background-tile size below (see fitBodyBackgroundTile()).
-const BODY_BG_NATIVE = {w:1376, h:768};
 function fitCanvasToViewport(){
   const nominal = LAYOUT_SIZES[state.layout] || LAYOUT_SIZES.wide;
   const w = Math.min(nominal.w, window.innerWidth);
@@ -6884,30 +6887,6 @@ function fitCanvasToViewport(){
   document.body.style.setProperty('--wk-w', w+'px');
   document.body.style.setProperty('--wk-h', h+'px');
   fitSignGapToViewport(h);
-  fitBodyBackgroundTile(w, h);
-}
-// Keeps body's own copy of the background art (visible in the margin on any
-// window/monitor wider or taller than the fixed #app canvas -- see the CSS
-// comment above body{} for why it has one at all) at the EXACT SAME scale
-// and crop #app's own background-size:cover renders at, instead of body
-// independently cover-fitting the whole viewport (a different, wider/taller
-// box than #app's own, so it produces a DIFFERENT crop/scale of the same
-// photo) -- confirmed via a real ultrawide screenshot that the two mismatched
-// crops sitting right next to each other reads as the image being distorted/
-// duplicated at the seam, not a clean continuation. CSS alone can't express
-// "cover, but sized to a fixed box, not to whatever box you're painted on" --
-// so this replicates the cover-fit math by hand (scale = the LARGER of the
-// two ratios, same as the CSS spec's own cover algorithm) and writes the
-// result as an explicit pixel background-size, with body's own
-// background-repeat left at its default (repeat) so the identically-scaled
-// tile continues edge-to-edge into the margin instead of just stretching or
-// going blank past a single copy.
-function fitBodyBackgroundTile(w, h){
-  const scale = Math.max(w / BODY_BG_NATIVE.w, h / BODY_BG_NATIVE.h);
-  const tileW = BODY_BG_NATIVE.w * scale;
-  const tileH = BODY_BG_NATIVE.h * scale;
-  document.body.style.setProperty('--wk-bg-tile-w', tileW+'px');
-  document.body.style.setProperty('--wk-bg-tile-h', tileH+'px');
 }
 
 function render(){
