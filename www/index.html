@@ -545,13 +545,14 @@
   .gridHammerBtn:hover{filter:brightness(1.15);transform:scale(1.05);}
   .gridHammerBtn.active{filter:brightness(1.25) drop-shadow(0 0 10px rgba(198,113,57,.55));}
   .gridHammerWrap .hammerInvPopout{left:auto;right:0;}
-  /* .invRowWrap holds the sprite + .invRow itself side by side -- .invRow
-     stays exactly as it was (a column stack of name/meta/scrap-or-confirm),
-     just no longer the outermost element, so none of its own children or
-     the scrap-confirm swap logic needed to change. */
-  .invRowWrap{display:flex;align-items:flex-start;gap:12px;margin-bottom:8px;}
-  .invRowWrap img{width:44px;height:44px;object-fit:contain;flex-shrink:0;}
-  .invRow{display:flex;flex-direction:column;gap:4px;padding:10px 12px;border-radius:var(--radius-sm);background:rgba(245,234,216,.6);border:1.5px solid var(--border);flex:1;min-width:0;}
+  /* .invRow is now a row itself: .invRowInfo (the original column stack of
+     name/meta/scrap-or-confirm, untouched content-wise) on the left, the
+     sprite on the right, both inside the one card -- direct feedback that
+     the sprite sitting outside the card (a separate flex sibling) read
+     wrong, it needed to be part of the card. */
+  .invRow{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:10px 12px;border-radius:var(--radius-sm);background:rgba(245,234,216,.6);border:1.5px solid var(--border);margin-bottom:8px;}
+  .invRowInfo{display:flex;flex-direction:column;gap:4px;flex:1;min-width:0;}
+  .invRow img{width:44px;height:44px;object-fit:contain;flex-shrink:0;}
   .invRow button{align-self:flex-start;margin-top:2px;}
   /* --panel used to be a near-invisible dark tint (rgba(32,30,29,.045)) — fine for
      panels whose actual text sits in its own card/row (.invRow, .orderCard, etc.,
@@ -6711,9 +6712,8 @@ function renderToast(){
 
 function renderSwordRow(s){
   const confirming = state.scrapConfirmId===s.id;
-  return `<div class="invRowWrap">
-    <img src="${swordArt(s)}" alt="${s.name}">
-    <div class="invRow">
+  return `<div class="invRow">
+    <div class="invRowInfo">
       <div class="rank${s.rank}" style="font-weight:600;font-size:12.5px;">${s.name}${s.saleBonus?' <span class="badge" style="border-color:var(--gold);color:var(--gold);">+sale</span>':''}</div>
       <div class="small">${s.material} &middot; <span class="badge">${s.rank}</span> &middot; AP ${s.ap} / DP ${s.dp}${s.el?' &middot; '+s.el:''}</div>
       ${confirming ? `
@@ -6724,6 +6724,7 @@ function renderSwordRow(s){
       </div>
       ` : `<button onclick="requestScrapSword('${s.id}')">Scrap</button>`}
     </div>
+    <img src="${swordArt(s)}" alt="${s.name}">
   </div>`;
 }
 // The Blades modal — opened from the shelf panel's "All N swords" button
